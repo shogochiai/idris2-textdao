@@ -1,0 +1,257 @@
+# TextDAO Specification
+# Idris2 port of textdao-monorepo Solidity contracts
+# Each REQ_* maps to a test for Step 1 Spec-Test parity
+
+[metadata]
+name = "idris2-textdao"
+version = "0.1.0"
+description = "TextDAO smart contracts in Idris2 targeting EVM"
+source = "textdao-monorepo/packages/contracts"
+
+# =============================================================================
+# Schema Requirements
+# =============================================================================
+
+[requirements.REQ_SCHEMA_001]
+id = "REQ_SCHEMA_001"
+title = "ERC-7201 storage slot calculation"
+description = "Storage slots must be calculated using keccak256 hashing per ERC-7201"
+module = "TextDAO.Storages.Schema"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_SCHEMA_002]
+id = "REQ_SCHEMA_002"
+title = "Proposal slot derivation"
+description = "Proposal slots derived from keccak256(pid . SLOT_DELIBERATION)"
+module = "TextDAO.Storages.Schema"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_SCHEMA_003]
+id = "REQ_SCHEMA_003"
+title = "Vote slot derivation"
+description = "Vote slots derived from keccak256(repAddr . votesBaseSlot)"
+module = "TextDAO.Storages.Schema"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_SCHEMA_004]
+id = "REQ_SCHEMA_004"
+title = "ActionStatus enum encoding"
+description = "ActionStatus (Pending=0, Executed=1, Failed=2) must round-trip correctly"
+module = "TextDAO.Storages.Schema"
+priority = "medium"
+status = "implemented"
+
+# =============================================================================
+# Members Requirements
+# =============================================================================
+
+[requirements.REQ_MEMBERS_001]
+id = "REQ_MEMBERS_001"
+title = "Admin-only member addition"
+description = "Only admins can add new members via addMember"
+module = "TextDAO.Functions.Members"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_MEMBERS_002]
+id = "REQ_MEMBERS_002"
+title = "Duplicate member prevention"
+description = "Cannot add an address that is already a member"
+module = "TextDAO.Functions.Members"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_MEMBERS_003]
+id = "REQ_MEMBERS_003"
+title = "Member-only text creation"
+description = "Only members can create text entries via createText"
+module = "TextDAO.Functions.Members"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_MEMBERS_004]
+id = "REQ_MEMBERS_004"
+title = "Single initialization"
+description = "initialize() can only be called once (when adminCount == 0)"
+module = "TextDAO.Functions.Members"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_MEMBERS_005]
+id = "REQ_MEMBERS_005"
+title = "MemberAdded event emission"
+description = "MemberAdded event emitted with indexed member address and index"
+module = "TextDAO.Functions.Members"
+priority = "medium"
+status = "implemented"
+
+# =============================================================================
+# Propose Requirements
+# =============================================================================
+
+[requirements.REQ_PROPOSE_001]
+id = "REQ_PROPOSE_001"
+title = "Member-only proposal creation"
+description = "Only members can create proposals via propose()"
+module = "TextDAO.Functions.OnlyMember.Propose"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_PROPOSE_002]
+id = "REQ_PROPOSE_002"
+title = "Proposal ID auto-increment"
+description = "Each new proposal gets an incrementing ID starting from 0"
+module = "TextDAO.Functions.OnlyMember.Propose"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_PROPOSE_003]
+id = "REQ_PROPOSE_003"
+title = "Proposal timing initialization"
+description = "Proposals initialize with createdAt=now, expiration=now+expiryDuration"
+module = "TextDAO.Functions.OnlyMember.Propose"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_PROPOSE_004]
+id = "REQ_PROPOSE_004"
+title = "Header creation with proposal"
+description = "Initial proposal includes one header with metadataCid"
+module = "TextDAO.Functions.OnlyMember.Propose"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_PROPOSE_005]
+id = "REQ_PROPOSE_005"
+title = "Proposed event emission"
+description = "Proposed event emitted with pid, proposer, times"
+module = "TextDAO.Functions.OnlyMember.Propose"
+priority = "medium"
+status = "implemented"
+
+# =============================================================================
+# Vote Requirements
+# =============================================================================
+
+[requirements.REQ_VOTE_001]
+id = "REQ_VOTE_001"
+title = "Representative-only voting"
+description = "Only proposal representatives can cast votes"
+module = "TextDAO.Functions.OnlyReps.Vote"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_VOTE_002]
+id = "REQ_VOTE_002"
+title = "Non-expired proposal voting"
+description = "Cannot vote on expired proposals"
+module = "TextDAO.Functions.OnlyReps.Vote"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_VOTE_003]
+id = "REQ_VOTE_003"
+title = "Ranked choice vote storage"
+description = "Votes store 3 ranked header IDs and 3 ranked command IDs"
+module = "TextDAO.Functions.OnlyReps.Vote"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_VOTE_004]
+id = "REQ_VOTE_004"
+title = "Vote ID validation"
+description = "Header and command IDs must be within valid bounds"
+module = "TextDAO.Functions.OnlyReps.Vote"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_VOTE_005]
+id = "REQ_VOTE_005"
+title = "Voted event emission"
+description = "Voted event emitted with pid, rep address, vote details"
+module = "TextDAO.Functions.OnlyReps.Vote"
+priority = "medium"
+status = "implemented"
+
+# =============================================================================
+# Tally Requirements
+# =============================================================================
+
+[requirements.REQ_TALLY_001]
+id = "REQ_TALLY_001"
+title = "Expiration-based tally trigger"
+description = "Tally only executes after proposal expiration"
+module = "TextDAO.Functions.Tally"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_TALLY_002]
+id = "REQ_TALLY_002"
+title = "RCV score calculation"
+description = "1st choice=3pts, 2nd choice=2pts, 3rd choice=1pt"
+module = "TextDAO.Functions.Tally"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_TALLY_003]
+id = "REQ_TALLY_003"
+title = "Quorum requirement"
+description = "Winning header/command must meet quorumScore threshold"
+module = "TextDAO.Functions.Tally"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_TALLY_004]
+id = "REQ_TALLY_004"
+title = "Approved ID storage"
+description = "Winning header/command IDs stored with +1 offset (0 = not set)"
+module = "TextDAO.Functions.Tally"
+priority = "medium"
+status = "implemented"
+
+[requirements.REQ_TALLY_005]
+id = "REQ_TALLY_005"
+title = "ProposalTallied event emission"
+description = "ProposalTallied event emitted with pid and winning IDs"
+module = "TextDAO.Functions.Tally"
+priority = "medium"
+status = "implemented"
+
+# =============================================================================
+# EVM Integration Requirements
+# =============================================================================
+
+[requirements.REQ_EVM_001]
+id = "REQ_EVM_001"
+title = "Function selector dispatch"
+description = "Entry point correctly dispatches based on 4-byte selector"
+module = "TextDAO.Functions.*"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_EVM_002]
+id = "REQ_EVM_002"
+title = "Calldata parsing"
+description = "Arguments correctly parsed from calldata at 32-byte offsets"
+module = "TextDAO.Functions.*"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_EVM_003]
+id = "REQ_EVM_003"
+title = "Return value encoding"
+description = "Return values correctly encoded to memory and returned"
+module = "TextDAO.Functions.*"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_EVM_004]
+id = "REQ_EVM_004"
+title = "Revert on unauthorized"
+description = "Unauthorized calls revert with evmRevert(0,0)"
+module = "TextDAO.Functions.*"
+priority = "high"
+status = "implemented"

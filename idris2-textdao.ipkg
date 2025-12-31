@@ -1,0 +1,15 @@
+package idris2-textdao
+version = "0.1.0"
+authors = "bob"
+brief = "TextDAO smart contracts in Idris2 targeting EVM via idris2-evm"
+
+depends = base, contrib
+
+sourcedir = "src"
+
+modules = TextDAO.Storages.Schema
+        , TextDAO.Tests.SchemaTest
+        , TextDAO.Tests.AllTests
+
+main = TextDAO.Tests.AllTests
+executable = textdao-tests
