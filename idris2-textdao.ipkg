@@ -8,7 +8,16 @@ depends = base, contrib
 sourcedir = "src"
 
 modules = TextDAO.Storages.Schema
+        , TextDAO.Functions.Members
+        , TextDAO.Functions.OnlyMember.Propose
+        , TextDAO.Functions.OnlyReps.Vote
+        , TextDAO.Functions.Tally
         , TextDAO.Tests.SchemaTest
+        , TextDAO.Tests.MembersTest
+        , TextDAO.Tests.ProposeTest
+        , TextDAO.Tests.VoteTest
+        , TextDAO.Tests.TallyTest
+        , TextDAO.Tests.EvmTest
         , TextDAO.Tests.AllTests
 
 main = TextDAO.Tests.AllTests

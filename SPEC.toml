@@ -255,3 +255,153 @@ description = "Unauthorized calls revert with evmRevert(0,0)"
 module = "TextDAO.Functions.*"
 priority = "high"
 status = "implemented"
+
+# =============================================================================
+# Vocabulary for TRM Training (vocab.db)
+# =============================================================================
+
+# --- Morphological Families ---
+
+[[vocab.morph_family]]
+stem = "propose"
+variants = ["proposes", "proposed", "proposing", "proposal", "proposals"]
+
+[[vocab.morph_family]]
+stem = "vote"
+variants = ["votes", "voted", "voting", "voter", "voters"]
+
+[[vocab.morph_family]]
+stem = "tally"
+variants = ["tallies", "tallied", "tallying"]
+
+[[vocab.morph_family]]
+stem = "member"
+variants = ["members", "membership"]
+
+[[vocab.morph_family]]
+stem = "representative"
+variants = ["representatives", "rep", "reps"]
+
+[[vocab.morph_family]]
+stem = "approve"
+variants = ["approves", "approved", "approving", "approval"]
+
+[[vocab.morph_family]]
+stem = "expire"
+variants = ["expires", "expired", "expiring", "expiration", "expiry"]
+
+[[vocab.morph_family]]
+stem = "execute"
+variants = ["executes", "executed", "executing", "execution"]
+
+[[vocab.morph_family]]
+stem = "store"
+variants = ["stores", "stored", "storing", "storage", "sstore", "sload"]
+
+[[vocab.morph_family]]
+stem = "header"
+variants = ["headers"]
+
+[[vocab.morph_family]]
+stem = "command"
+variants = ["commands", "cmd", "cmds"]
+
+[[vocab.morph_family]]
+stem = "deliberate"
+variants = ["deliberates", "deliberation", "deliberating"]
+
+[[vocab.morph_family]]
+stem = "snapshot"
+variants = ["snapshots", "snap", "snapped", "snapping"]
+
+[[vocab.morph_family]]
+stem = "revert"
+variants = ["reverts", "reverted", "reverting"]
+
+[[vocab.morph_family]]
+stem = "slot"
+variants = ["slots"]
+
+# --- Synonym Sets ---
+
+[[vocab.synset]]
+id = "syn.member"
+words = ["member", "participant", "voter", "stakeholder"]
+
+[[vocab.synset]]
+id = "syn.proposal"
+words = ["proposal", "motion", "submission", "request"]
+
+[[vocab.synset]]
+id = "syn.vote"
+words = ["vote", "ballot", "choice", "selection"]
+
+[[vocab.synset]]
+id = "syn.approve"
+words = ["approve", "accept", "ratify", "pass"]
+
+[[vocab.synset]]
+id = "syn.reject"
+words = ["reject", "deny", "decline", "fail"]
+
+[[vocab.synset]]
+id = "syn.storage_read"
+words = ["sload", "read", "get", "load", "fetch"]
+
+[[vocab.synset]]
+id = "syn.storage_write"
+words = ["sstore", "write", "set", "store", "save"]
+
+[[vocab.synset]]
+id = "syn.check"
+words = ["check", "verify", "validate", "assert", "require"]
+
+[[vocab.synset]]
+id = "syn.revert"
+words = ["revert", "fail", "error", "throw", "panic"]
+
+# --- Abbreviations ---
+
+[[vocab.abbrev]]
+short = "pid"
+long = "proposal id"
+
+[[vocab.abbrev]]
+short = "hid"
+long = "header id"
+
+[[vocab.abbrev]]
+short = "cid"
+long = "content identifier"
+
+[[vocab.abbrev]]
+short = "rcv"
+long = "ranked choice voting"
+
+[[vocab.abbrev]]
+short = "rep"
+long = "representative"
+
+[[vocab.abbrev]]
+short = "tx"
+long = "transaction"
+
+[[vocab.abbrev]]
+short = "addr"
+long = "address"
+
+[[vocab.abbrev]]
+short = "meta"
+long = "metadata"
+
+[[vocab.abbrev]]
+short = "cfg"
+long = "configuration"
+
+[[vocab.abbrev]]
+short = "cmd"
+long = "command"
+
+[[vocab.abbrev]]
+short = "evm"
+long = "ethereum virtual machine"
