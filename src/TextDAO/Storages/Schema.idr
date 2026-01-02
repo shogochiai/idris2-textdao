@@ -466,3 +466,27 @@ setFullyExecuted : ProposalId -> Bool -> IO ()
 setFullyExecuted pid executed = do
   metaSlot <- getProposalMetaSlot pid
   sstore (metaSlot + META_OFFSET_EXECUTED) (if executed then 1 else 0)
+
+-- =============================================================================
+-- StorageCap-aware versions (for capability-based access)
+-- =============================================================================
+
+||| Get member count (capability-aware)
+export
+getMemberCountCap : (sloadCap : Integer -> IO Integer) -> IO Integer
+getMemberCountCap sloadCap = sloadCap SLOT_MEMBER_COUNT
+
+||| Set member count (capability-aware)
+export
+setMemberCountCap : (sstoreCap : Integer -> Integer -> IO ()) -> Integer -> IO ()
+setMemberCountCap sstoreCap val = sstoreCap SLOT_MEMBER_COUNT val
+
+||| Calculate storage slot for member by index (capability-aware)
+export
+getMemberSlotCap : (mstoreCap : Integer -> Integer -> IO ())
+                -> (keccak256Cap : Integer -> Integer -> IO Integer)
+                -> Integer -> IO Integer
+getMemberSlotCap mstoreCap keccak256Cap index = do
+  mstoreCap 0 index
+  mstoreCap 32 SLOT_MEMBERS
+  keccak256Cap 0 64
