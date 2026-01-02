@@ -1,9 +1,9 @@
 ||| TextDAO Propose Function
 ||| REQ_PROPOSE_001: Proposal creation with header and commands
-module TextDAO.Functions.OnlyMember.Propose
+module TextDAO.Functions.Propose.Propose
 
 import TextDAO.Storages.Schema
-import TextDAO.Functions.Members
+import TextDAO.Functions.Members.Members
 
 %default covering
 

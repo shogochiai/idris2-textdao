@@ -1,9 +1,9 @@
 ||| TextDAO Tally Function
 ||| REQ_TALLY_001: RCV vote counting and proposal approval
-module TextDAO.Functions.Tally
+module TextDAO.Functions.Tally.Tally
 
 import TextDAO.Storages.Schema
-import TextDAO.Functions.OnlyReps.Vote
+import TextDAO.Functions.Vote.Vote
 
 import Data.List
 

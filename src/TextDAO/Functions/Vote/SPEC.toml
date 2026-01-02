@@ -1,0 +1,47 @@
+# Vote Function Specification
+# Uses idris2-subcontract types: Sig, Sel, Entry, Handler, StorageCap
+
+[metadata]
+name = "Vote"
+description = "Representative voting on proposals"
+imports = ["Subcontract.Core.Entry", "Subcontract.Core.StorageCap"]
+
+[requirements.REQ_VOTE_001]
+id = "REQ_VOTE_001"
+title = "Representative-only voting"
+description = "Only proposal representatives can cast votes"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_VOTE_002]
+id = "REQ_VOTE_002"
+title = "Non-expired proposal voting"
+description = "Cannot vote on expired proposals"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_VOTE_003]
+id = "REQ_VOTE_003"
+title = "Ranked choice vote storage"
+description = "Votes store 3 ranked header IDs and 3 ranked command IDs"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_VOTE_004]
+id = "REQ_VOTE_004"
+title = "Vote ID validation"
+description = "Header and command IDs must be within valid bounds"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_VOTE_005]
+id = "REQ_VOTE_005"
+title = "Voted event emission"
+description = "Voted event emitted with pid, rep address, vote details"
+priority = "medium"
+status = "implemented"
+
+[functions.vote]
+sig = "vote(uint256,uint256[3],uint256[3])"
+handler = "voteHandler"
+uses_storage = true

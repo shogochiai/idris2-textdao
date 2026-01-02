@@ -8,16 +8,16 @@ depends = base, contrib, idris2-subcontract
 sourcedir = "src"
 
 modules = TextDAO.Storages.Schema
-        , TextDAO.Functions.Members
-        , TextDAO.Functions.Members2
-        , TextDAO.Functions.OnlyMember.Propose
-        , TextDAO.Functions.OnlyReps.Vote
-        , TextDAO.Functions.Tally
+        , TextDAO.Functions.Members.Members
+        , TextDAO.Functions.Members.Members2
+        , TextDAO.Functions.Members.Tests.MembersTest
+        , TextDAO.Functions.Propose.Propose
+        , TextDAO.Functions.Propose.Tests.ProposeTest
+        , TextDAO.Functions.Vote.Vote
+        , TextDAO.Functions.Vote.Tests.VoteTest
+        , TextDAO.Functions.Tally.Tally
+        , TextDAO.Functions.Tally.Tests.TallyTest
         , TextDAO.Tests.SchemaTest
-        , TextDAO.Tests.MembersTest
-        , TextDAO.Tests.ProposeTest
-        , TextDAO.Tests.VoteTest
-        , TextDAO.Tests.TallyTest
         , TextDAO.Tests.EvmTest
         , TextDAO.Tests.AllTests
 

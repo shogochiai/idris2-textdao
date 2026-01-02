@@ -1,0 +1,47 @@
+# Tally Function Specification
+# Uses idris2-subcontract types: Sig, Sel, Entry, Handler, StorageCap
+
+[metadata]
+name = "Tally"
+description = "Vote tallying and proposal finalization"
+imports = ["Subcontract.Core.Entry", "Subcontract.Core.StorageCap"]
+
+[requirements.REQ_TALLY_001]
+id = "REQ_TALLY_001"
+title = "Expiration-based tally trigger"
+description = "Tally only executes after proposal expiration"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_TALLY_002]
+id = "REQ_TALLY_002"
+title = "RCV score calculation"
+description = "1st choice=3pts, 2nd choice=2pts, 3rd choice=1pt"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_TALLY_003]
+id = "REQ_TALLY_003"
+title = "Quorum requirement"
+description = "Winning header/command must meet quorumScore threshold"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_TALLY_004]
+id = "REQ_TALLY_004"
+title = "Approved ID storage"
+description = "Winning header/command IDs stored with +1 offset (0 = not set)"
+priority = "medium"
+status = "implemented"
+
+[requirements.REQ_TALLY_005]
+id = "REQ_TALLY_005"
+title = "ProposalTallied event emission"
+description = "ProposalTallied event emitted with pid and winning IDs"
+priority = "medium"
+status = "implemented"
+
+[functions.tally]
+sig = "tally(uint256)"
+handler = "tallyHandler"
+uses_storage = true

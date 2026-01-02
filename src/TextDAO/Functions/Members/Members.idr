@@ -1,6 +1,6 @@
 ||| TextDAO Members Function
 ||| REQ_MEMBERS_001: Member registration and lookup
-module TextDAO.Functions.Members
+module TextDAO.Functions.Members.Members
 
 import TextDAO.Storages.Schema
 

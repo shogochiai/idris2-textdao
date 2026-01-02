@@ -1,6 +1,6 @@
 ||| TextDAO Vote Function
 ||| REQ_VOTE_001: Representatives can vote on proposals using RCV
-module TextDAO.Functions.OnlyReps.Vote
+module TextDAO.Functions.Vote.Vote
 
 import TextDAO.Storages.Schema
 

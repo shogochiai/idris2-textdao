@@ -1,0 +1,47 @@
+# Propose Function Specification
+# Uses idris2-subcontract types: Sig, Sel, Entry, Handler, StorageCap
+
+[metadata]
+name = "Propose"
+description = "Proposal creation by members"
+imports = ["Subcontract.Core.Entry", "Subcontract.Core.StorageCap"]
+
+[requirements.REQ_PROPOSE_001]
+id = "REQ_PROPOSE_001"
+title = "Member-only proposal creation"
+description = "Only members can create proposals via propose()"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_PROPOSE_002]
+id = "REQ_PROPOSE_002"
+title = "Proposal ID auto-increment"
+description = "Each new proposal gets an incrementing ID starting from 0"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_PROPOSE_003]
+id = "REQ_PROPOSE_003"
+title = "Proposal timing initialization"
+description = "Proposals initialize with createdAt=now, expiration=now+expiryDuration"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_PROPOSE_004]
+id = "REQ_PROPOSE_004"
+title = "Header creation with proposal"
+description = "Initial proposal includes one header with metadataCid"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_PROPOSE_005]
+id = "REQ_PROPOSE_005"
+title = "Proposed event emission"
+description = "Proposed event emitted with pid, proposer, times"
+priority = "medium"
+status = "implemented"
+
+[functions.propose]
+sig = "propose(bytes32)"
+handler = "proposeHandler"
+uses_storage = true

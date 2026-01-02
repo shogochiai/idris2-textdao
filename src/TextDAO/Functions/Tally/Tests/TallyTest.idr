@@ -1,11 +1,11 @@
 ||| TextDAO Tally Test Suite
 ||| Complete EVM runtime tests for RCV tallying
-module TextDAO.Tests.TallyTest
+module TextDAO.Functions.Tally.Tests.TallyTest
 
 import TextDAO.Storages.Schema
-import TextDAO.Functions.OnlyReps.Vote
-import TextDAO.Functions.OnlyMember.Propose
-import TextDAO.Functions.Tally
+import TextDAO.Functions.Vote.Vote
+import TextDAO.Functions.Propose.Propose
+import TextDAO.Functions.Tally.Tally
 
 import Data.List
 

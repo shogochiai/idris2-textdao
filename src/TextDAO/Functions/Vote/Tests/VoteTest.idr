@@ -1,10 +1,10 @@
 ||| TextDAO Vote Test Suite
 ||| Complete EVM runtime tests for RCV voting
-module TextDAO.Tests.VoteTest
+module TextDAO.Functions.Vote.Tests.VoteTest
 
 import TextDAO.Storages.Schema
-import TextDAO.Functions.OnlyReps.Vote
-import TextDAO.Functions.OnlyMember.Propose
+import TextDAO.Functions.Vote.Vote
+import TextDAO.Functions.Propose.Propose
 
 %default covering
 

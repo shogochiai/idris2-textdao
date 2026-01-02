@@ -4,10 +4,10 @@
 module TextDAO.Tests.AllTests
 
 import TextDAO.Tests.SchemaTest
-import TextDAO.Tests.MembersTest
-import TextDAO.Tests.ProposeTest
-import TextDAO.Tests.VoteTest
-import TextDAO.Tests.TallyTest
+import TextDAO.Functions.Members.Tests.MembersTest
+import TextDAO.Functions.Propose.Tests.ProposeTest
+import TextDAO.Functions.Vote.Tests.VoteTest
+import TextDAO.Functions.Tally.Tests.TallyTest
 import TextDAO.Tests.EvmTest
 
 %default covering

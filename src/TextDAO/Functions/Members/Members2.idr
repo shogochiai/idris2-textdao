@@ -7,7 +7,7 @@
 ||| - Functions taking StorageCap can access storage
 ||| - Functions without it cannot (enforced by module boundary)
 |||
-module TextDAO.Functions.Members2
+module TextDAO.Functions.Members.Members2
 
 import TextDAO.Storages.Schema
 import Subcontract.Core.Entry

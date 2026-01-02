@@ -1,9 +1,9 @@
 ||| TextDAO Members Test Suite
 ||| Complete EVM runtime tests for member management
-module TextDAO.Tests.MembersTest
+module TextDAO.Functions.Members.Tests.MembersTest
 
 import TextDAO.Storages.Schema
-import TextDAO.Functions.Members
+import TextDAO.Functions.Members.Members
 
 %default covering
 

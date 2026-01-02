@@ -1,10 +1,10 @@
 ||| TextDAO Propose Test Suite
 ||| Complete EVM runtime tests for proposal creation
-module TextDAO.Tests.ProposeTest
+module TextDAO.Functions.Propose.Tests.ProposeTest
 
 import TextDAO.Storages.Schema
-import TextDAO.Functions.Members
-import TextDAO.Functions.OnlyMember.Propose
+import TextDAO.Functions.Members.Members
+import TextDAO.Functions.Propose.Propose
 
 %default covering
 

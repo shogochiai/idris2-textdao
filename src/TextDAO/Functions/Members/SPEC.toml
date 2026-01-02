@@ -1,0 +1,67 @@
+# Members Function Specification
+# Uses idris2-subcontract types: Sig, Sel, Entry, Handler, StorageCap
+
+[metadata]
+name = "Members"
+description = "Member registration and lookup"
+imports = ["Subcontract.Core.Entry", "Subcontract.Core.StorageCap"]
+
+[requirements.REQ_MEMBERS_001]
+id = "REQ_MEMBERS_001"
+title = "Admin-only member addition"
+description = "Only admins can add new members via addMember"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_MEMBERS_002]
+id = "REQ_MEMBERS_002"
+title = "Duplicate member prevention"
+description = "Cannot add an address that is already a member"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_MEMBERS_003]
+id = "REQ_MEMBERS_003"
+title = "Member-only text creation"
+description = "Only members can create text entries via createText"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_MEMBERS_004]
+id = "REQ_MEMBERS_004"
+title = "Single initialization"
+description = "initialize() can only be called once (when adminCount == 0)"
+priority = "high"
+status = "implemented"
+
+[requirements.REQ_MEMBERS_005]
+id = "REQ_MEMBERS_005"
+title = "MemberAdded event emission"
+description = "MemberAdded event emitted with indexed member address and index"
+priority = "medium"
+status = "implemented"
+
+# Function signatures (must match Sig definitions in Members.idr)
+[functions.addMember]
+sig = "addMember(address,bytes32)"
+selector = "0xca6d56dc"
+handler = "addMemberHandler"
+uses_storage = true
+
+[functions.getMember]
+sig = "getMember(uint256)"
+selector = "0x9c0a0cd2"
+handler = "getMemberHandler"
+uses_storage = true
+
+[functions.getMemberCount]
+sig = "getMemberCount()"
+selector = "0x997072f7"
+handler = "getMemberCountHandler"
+uses_storage = true
+
+[functions.isMember]
+sig = "isMember(address)"
+selector = "0xa230c524"
+handler = "isMemberHandler"
+uses_storage = true
