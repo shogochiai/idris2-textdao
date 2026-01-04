@@ -6,6 +6,7 @@ import TextDAO.Storages.Schema
 import TextDAO.Functions.Propose.Propose
 import TextDAO.Functions.Tally.Tally
 import TextDAO.Functions.Execute.Execute
+import Subcontract.Core.Outcome
 
 %default covering
 
@@ -25,8 +26,11 @@ test_REQ_EXECUTE_001_execute = do
   -- Manually approve the proposal
   approveProposal pid 1 1
 
-  -- Execute
-  success <- execute pid
+  -- Execute (returns Outcome Bool)
+  result <- execute pid
+  let success = case result of
+                  Ok b => b
+                  Fail _ _ => False
 
   -- Verify
   executed <- isFullyExecuted pid
@@ -58,7 +62,7 @@ test_execute_once = do
   -- Manually approve
   approveProposal pid 1 1
 
-  -- Execute first time
+  -- Execute first time (returns Outcome Bool)
   _ <- execute pid
   executed1 <- isFullyExecuted pid
 

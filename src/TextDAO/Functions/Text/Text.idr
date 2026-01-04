@@ -2,75 +2,45 @@
 ||| REQ_TEXT_001: Create and manage texts from approved proposals
 module TextDAO.Functions.Text.Text
 
+import public Subcontract.Core.Entry
+import Subcontract.Core.ABI.Decoder
+import public Subcontract.Core.Outcome
 import TextDAO.Storages.Schema
+
+-- Note: EVM primitives now come from TextDAO.Storages.Schema via Subcontract.Core.Storable
 
 %default covering
 
 -- =============================================================================
--- EVM Primitives
+-- Function Signatures
 -- =============================================================================
 
-%foreign "evm:caller"
-prim__caller : PrimIO Integer
+||| createText(uint256,bytes32) -> uint256
+public export
+createTextSig : Sig
+createTextSig = MkSig "createText" [TUint256, TBytes32] [TUint256]
 
-%foreign "evm:revert"
-prim__revert : Integer -> Integer -> PrimIO ()
+public export
+createTextSel : Sel createTextSig
+createTextSel = MkSel 0xc0123456
 
-%foreign "evm:calldataload"
-prim__calldataload : Integer -> PrimIO Integer
+||| getText(uint256) -> bytes32
+public export
+getTextSig : Sig
+getTextSig = MkSig "getText" [TUint256] [TBytes32]
 
-%foreign "evm:return"
-prim__return : Integer -> Integer -> PrimIO ()
+public export
+getTextSel : Sel getTextSig
+getTextSel = MkSel 0xc1234567
 
-%foreign "evm:log2"
-prim__log2 : Integer -> Integer -> Integer -> Integer -> PrimIO ()
+||| getTextCount() -> uint256
+public export
+getTextCountSig : Sig
+getTextCountSig = MkSig "getTextCount" [] [TUint256]
 
-caller : IO Integer
-caller = primIO prim__caller
-
-evmRevert : Integer -> Integer -> IO ()
-evmRevert off len = primIO (prim__revert off len)
-
-calldataload : Integer -> IO Integer
-calldataload off = primIO (prim__calldataload off)
-
-evmReturn : Integer -> Integer -> IO ()
-evmReturn off len = primIO (prim__return off len)
-
-evmLog2 : Integer -> Integer -> Integer -> Integer -> IO ()
-evmLog2 off len topic1 topic2 = primIO (prim__log2 off len topic1 topic2)
-
--- =============================================================================
--- Function Selectors
--- =============================================================================
-
-||| createText(uint256,bytes32) -> 0xc0123456
-SEL_CREATE_TEXT : Integer
-SEL_CREATE_TEXT = 0xc0123456
-
-||| getText(uint256) -> 0xc1234567
-SEL_GET_TEXT : Integer
-SEL_GET_TEXT = 0xc1234567
-
-||| getTextCount() -> 0xc2345678
-SEL_GET_TEXT_COUNT : Integer
-SEL_GET_TEXT_COUNT = 0xc2345678
-
--- =============================================================================
--- Entry Point Helpers
--- =============================================================================
-
-||| Extract function selector from calldata (first 4 bytes)
-getSelector : IO Integer
-getSelector = do
-  data_ <- calldataload 0
-  pure (data_ `div` 0x100000000000000000000000000000000000000000000000000000000)
-
-||| Return a uint256 value
-returnUint : Integer -> IO ()
-returnUint val = do
-  mstore 0 val
-  evmReturn 0 32
+public export
+getTextCountSel : Sel getTextCountSig
+getTextCountSel = MkSel 0xc2345678
 
 -- =============================================================================
 -- Event Topics
@@ -141,7 +111,7 @@ getTextHeaderId textId = do
   sload (slot + TEXT_OFFSET_HEADER_ID)
 
 -- =============================================================================
--- Create Text Function
+-- Create Text Core Logic
 -- =============================================================================
 
 ||| Check if proposal is approved
@@ -153,14 +123,12 @@ isProposalApproved pid = do
 ||| Create text from approved proposal
 ||| REQ_TEXT_001: Create text after proposal is approved
 export
-createText : ProposalId -> MetadataCid -> IO Integer
+createText : ProposalId -> MetadataCid -> IO (Outcome Integer)
 createText pid metadataCid = do
   -- Check proposal is approved
   approved <- isProposalApproved pid
   if not approved
-    then do
-      evmRevert 0 0  -- ProposalNotApproved
-      pure 0
+    then pure (Fail InvalidTransition (tagEvidence "ProposalNotApproved"))
     else do
       -- Get next text ID
       textCount <- getTextCount
@@ -179,36 +147,36 @@ createText pid metadataCid = do
 
       -- Emit TextCreated event
       mstore 0 textId
-      evmLog2 0 32 EVENT_TEXT_CREATED pid
+      log2 0 32 EVENT_TEXT_CREATED pid
 
-      pure textId
+      pure (Ok textId)
 
 -- =============================================================================
--- Main Entry Point
+-- Entry Points
 -- =============================================================================
 
-||| Main entry point for Text contract
+||| Entry: createText(uint256,bytes32) -> uint256
 export
-main : IO ()
-main = do
-  selector <- getSelector
+createTextEntry : Entry createTextSig
+createTextEntry = MkEntry createTextSel $ do
+  pid <- runDecoder decodeUint256
+  metadataCid <- runDecoder decodeBytes32
+  result <- createText (uint256Value pid) (bytes32Value metadataCid)
+  case result of
+    Ok textId => returnUint textId
+    Fail _ _ => evmRevert 0 0
 
-  if selector == SEL_CREATE_TEXT
-    then do
-      pid <- calldataload 4
-      metadataCid <- calldataload 36
-      textId <- createText pid metadataCid
-      returnUint textId
+||| Entry: getText(uint256) -> bytes32
+export
+getTextEntry : Entry getTextSig
+getTextEntry = MkEntry getTextSel $ do
+  textId <- runDecoder decodeUint256
+  metadata <- getTextMetadata (uint256Value textId)
+  returnUint metadata
 
-    else if selector == SEL_GET_TEXT
-    then do
-      textId <- calldataload 4
-      metadata <- getTextMetadata textId
-      returnUint metadata
-
-    else if selector == SEL_GET_TEXT_COUNT
-    then do
-      count <- getTextCount
-      returnUint count
-
-    else evmRevert 0 0
+||| Entry: getTextCount() -> uint256
+export
+getTextCountEntry : Entry getTextCountSig
+getTextCountEntry = MkEntry getTextCountSel $ do
+  count <- getTextCount
+  returnUint count

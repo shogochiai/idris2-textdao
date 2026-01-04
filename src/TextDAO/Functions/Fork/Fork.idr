@@ -2,71 +2,48 @@
 ||| REQ_FORK_001: Representatives can fork proposals with new headers/commands
 module TextDAO.Functions.Fork.Fork
 
+import public Subcontract.Core.Entry
+import Subcontract.Core.ABI.Decoder
+import public Subcontract.Core.Outcome
 import TextDAO.Storages.Schema
 import TextDAO.Functions.Vote.Vote
 import TextDAO.Functions.Propose.Propose
+import public TextDAO.Security.AccessControl
+
+-- Note: EVM primitives now come from TextDAO.Storages.Schema via Subcontract.Core.Storable
 
 %default covering
 
 -- =============================================================================
--- EVM Primitives
+-- Function Signatures
 -- =============================================================================
 
-%foreign "evm:caller"
-prim__caller : PrimIO Integer
+||| fork(uint256,bytes32,bytes32) -> uint256
+public export
+forkSig : Sig
+forkSig = MkSig "fork" [TUint256, TBytes32, TBytes32] [TUint256]
 
-%foreign "evm:revert"
-prim__revert : Integer -> Integer -> PrimIO ()
+public export
+forkSel : Sel forkSig
+forkSel = MkSel 0xf0123456
 
-%foreign "evm:calldataload"
-prim__calldataload : Integer -> PrimIO Integer
+||| forkHeader(uint256,bytes32) -> uint256
+public export
+forkHeaderSig : Sig
+forkHeaderSig = MkSig "forkHeader" [TUint256, TBytes32] [TUint256]
 
-%foreign "evm:return"
-prim__return : Integer -> Integer -> PrimIO ()
+public export
+forkHeaderSel : Sel forkHeaderSig
+forkHeaderSel = MkSel 0xf1234567
 
-caller : IO Integer
-caller = primIO prim__caller
+||| forkCommand(uint256,bytes32) -> uint256
+public export
+forkCommandSig : Sig
+forkCommandSig = MkSig "forkCommand" [TUint256, TBytes32] [TUint256]
 
-evmRevert : Integer -> Integer -> IO ()
-evmRevert off len = primIO (prim__revert off len)
-
-calldataload : Integer -> IO Integer
-calldataload off = primIO (prim__calldataload off)
-
-evmReturn : Integer -> Integer -> IO ()
-evmReturn off len = primIO (prim__return off len)
-
--- =============================================================================
--- Function Selectors
--- =============================================================================
-
-||| fork(uint256,bytes32,bytes32) -> 0xf0123456
-SEL_FORK : Integer
-SEL_FORK = 0xf0123456
-
-||| forkHeader(uint256,bytes32) -> 0xf1234567
-SEL_FORK_HEADER : Integer
-SEL_FORK_HEADER = 0xf1234567
-
-||| forkCommand(uint256,bytes32) -> 0xf2345678
-SEL_FORK_COMMAND : Integer
-SEL_FORK_COMMAND = 0xf2345678
-
--- =============================================================================
--- Entry Point Helpers
--- =============================================================================
-
-||| Extract function selector from calldata (first 4 bytes)
-getSelector : IO Integer
-getSelector = do
-  data_ <- calldataload 0
-  pure (data_ `div` 0x100000000000000000000000000000000000000000000000000000000)
-
-||| Return a uint256 value
-returnUint : Integer -> IO ()
-returnUint val = do
-  mstore 0 val
-  evmReturn 0 32
+public export
+forkCommandSel : Sel forkCommandSig
+forkCommandSel = MkSel 0xf2345678
 
 -- =============================================================================
 -- Command Storage
@@ -101,109 +78,118 @@ createCommand pid actionData = do
   pure cmdId
 
 -- =============================================================================
--- Fork Functions
+-- Fork Core Logic
 -- =============================================================================
+
+||| Fork header with compile-time proofs
+||| REQ_FORK_002: Reps can add alternative headers
+export
+forkHeaderWithProof : IsRep pid callerAddr -> NotExpired pid -> ProposalId -> MetadataCid -> IO HeaderId
+forkHeaderWithProof _ _ pid headerMetadata = createHeader pid headerMetadata
 
 ||| Fork header only - add a new header to existing proposal
 ||| REQ_FORK_002: Reps can add alternative headers
+||| Runtime checked version for entry points
 export
-forkHeader : ProposalId -> MetadataCid -> IO HeaderId
+forkHeader : ProposalId -> MetadataCid -> IO (Outcome HeaderId)
 forkHeader pid headerMetadata = do
-  -- Access control: onlyReps
   callerAddr <- caller
-  rep <- isRep pid callerAddr
+  repResult <- requireRepProof pid callerAddr
+  case repResult of
+    Fail c e => pure (Fail c e)
+    Ok repProof => do
+      expResult <- requireNotExpired pid
+      case expResult of
+        Fail c e => pure (Fail c e)
+        Ok notExpiredProof => do
+          hid <- forkHeaderWithProof repProof notExpiredProof pid headerMetadata
+          pure (Ok hid)
 
-  if not rep
-    then do
-      evmRevert 0 0  -- YouAreNotTheRep
-      pure 0
-    else do
-      -- Check proposal not expired
-      expired <- isProposalExpired pid
-      if expired
-        then do
-          evmRevert 0 0  -- ProposalAlreadyExpired
-          pure 0
-        else createHeader pid headerMetadata
+||| Fork command with compile-time proofs
+||| REQ_FORK_003: Reps can add alternative commands
+export
+forkCommandWithProof : IsRep pid callerAddr -> NotExpired pid -> ProposalId -> Integer -> IO CommandId
+forkCommandWithProof _ _ pid actionData = createCommand pid actionData
 
 ||| Fork command only - add a new command to existing proposal
 ||| REQ_FORK_003: Reps can add alternative commands
+||| Runtime checked version for entry points
 export
-forkCommand : ProposalId -> Integer -> IO CommandId
+forkCommand : ProposalId -> Integer -> IO (Outcome CommandId)
 forkCommand pid actionData = do
-  -- Access control: onlyReps
   callerAddr <- caller
-  rep <- isRep pid callerAddr
+  repResult <- requireRepProof pid callerAddr
+  case repResult of
+    Fail c e => pure (Fail c e)
+    Ok repProof => do
+      expResult <- requireNotExpired pid
+      case expResult of
+        Fail c e => pure (Fail c e)
+        Ok notExpiredProof => do
+          cid <- forkCommandWithProof repProof notExpiredProof pid actionData
+          pure (Ok cid)
 
-  if not rep
-    then do
-      evmRevert 0 0  -- YouAreNotTheRep
-      pure 0
-    else do
-      -- Check proposal not expired
-      expired <- isProposalExpired pid
-      if expired
-        then do
-          evmRevert 0 0  -- ProposalAlreadyExpired
-          pure 0
-        else createCommand pid actionData
+||| Fork with compile-time proofs
+||| REQ_FORK_001: Reps can fork proposals with new alternatives
+export
+forkWithProof : IsRep pid callerAddr -> NotExpired pid -> ProposalId -> MetadataCid -> Integer -> IO (HeaderId, CommandId)
+forkWithProof _ _ pid headerMetadata actionData = do
+  headerId <- createHeader pid headerMetadata
+  cmdId <- createCommand pid actionData
+  pure (headerId, cmdId)
 
 ||| Fork - add both header and command to existing proposal
 ||| REQ_FORK_001: Reps can fork proposals with new alternatives
+||| Runtime checked version for entry points
 export
-fork : ProposalId -> MetadataCid -> Integer -> IO (HeaderId, CommandId)
+fork : ProposalId -> MetadataCid -> Integer -> IO (Outcome (HeaderId, CommandId))
 fork pid headerMetadata actionData = do
-  -- Access control: onlyReps
   callerAddr <- caller
-  rep <- isRep pid callerAddr
-
-  if not rep
-    then do
-      evmRevert 0 0  -- YouAreNotTheRep
-      pure (0, 0)
-    else do
-      -- Check proposal not expired
-      expired <- isProposalExpired pid
-      if expired
-        then do
-          evmRevert 0 0  -- ProposalAlreadyExpired
-          pure (0, 0)
-        else do
-          headerId <- createHeader pid headerMetadata
-          cmdId <- createCommand pid actionData
-          pure (headerId, cmdId)
+  repResult <- requireRepProof pid callerAddr
+  case repResult of
+    Fail c e => pure (Fail c e)
+    Ok repProof => do
+      expResult <- requireNotExpired pid
+      case expResult of
+        Fail c e => pure (Fail c e)
+        Ok notExpiredProof => do
+          result <- forkWithProof repProof notExpiredProof pid headerMetadata actionData
+          pure (Ok result)
 
 -- =============================================================================
--- Main Entry Point
+-- Entry Points
 -- =============================================================================
 
-||| Main entry point for Fork contract
+||| Entry: fork(uint256,bytes32,bytes32) -> uint256
 export
-main : IO ()
-main = do
-  selector <- getSelector
+forkEntry : Entry forkSig
+forkEntry = MkEntry forkSel $ do
+  pid <- runDecoder decodeUint256
+  headerMetadata <- runDecoder decodeBytes32
+  actionData <- runDecoder decodeBytes32
+  result <- fork (uint256Value pid) (bytes32Value headerMetadata) (bytes32Value actionData)
+  case result of
+    Ok (hid, _) => returnUint hid
+    Fail _ _ => evmRevert 0 0
 
-  if selector == SEL_FORK
-    then do
-      pid <- calldataload 4
-      headerMetadata <- calldataload 36
-      actionData <- calldataload 68
-      (hid, cid) <- fork pid headerMetadata actionData
-      -- Return header ID (could also encode both)
-      returnUint hid
+||| Entry: forkHeader(uint256,bytes32) -> uint256
+export
+forkHeaderEntry : Entry forkHeaderSig
+forkHeaderEntry = MkEntry forkHeaderSel $ do
+  pid <- runDecoder decodeUint256
+  headerMetadata <- runDecoder decodeBytes32
+  result <- forkHeader (uint256Value pid) (bytes32Value headerMetadata)
+  case result of
+    Ok hid => returnUint hid
+    Fail _ _ => evmRevert 0 0
 
-    else if selector == SEL_FORK_HEADER
-    then do
-      pid <- calldataload 4
-      headerMetadata <- calldataload 36
-      hid <- forkHeader pid headerMetadata
-      returnUint hid
-
-    else if selector == SEL_FORK_COMMAND
-    then do
-      pid <- calldataload 4
-      actionData <- calldataload 36
-      cid <- forkCommand pid actionData
-      returnUint cid
-
-    else evmRevert 0 0
+||| Entry: forkCommand(uint256,bytes32) -> uint256
+export
+forkCommandEntry : Entry forkCommandSig
+forkCommandEntry = MkEntry forkCommandSel $ do
+  pid <- runDecoder decodeUint256
+  actionData <- runDecoder decodeBytes32
+  result <- forkCommand (uint256Value pid) (bytes32Value actionData)
+  case result of
+    Ok cid => returnUint cid
+    Fail _ _ => evmRevert 0 0

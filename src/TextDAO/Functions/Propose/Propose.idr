@@ -2,76 +2,47 @@
 ||| REQ_PROPOSE_001: Proposal creation with header and commands
 module TextDAO.Functions.Propose.Propose
 
+import public Subcontract.Core.Entry
+import Subcontract.Core.ABI.Decoder
+import public Subcontract.Core.Outcome
 import TextDAO.Storages.Schema
 import TextDAO.Functions.Members.Members
+import public TextDAO.Security.AccessControl
+
+-- Note: EVM primitives now come from TextDAO.Storages.Schema via Subcontract.Core.Storable
 
 %default covering
 
 -- =============================================================================
--- EVM Primitives
+-- Function Signatures
 -- =============================================================================
 
-%foreign "evm:timestamp"
-prim__timestamp : PrimIO Integer
+||| propose(bytes32) -> uint256
+public export
+proposeSig : Sig
+proposeSig = MkSig "propose" [TBytes32] [TUint256]
 
-%foreign "evm:caller"
-prim__caller : PrimIO Integer
+public export
+proposeSel : Sel proposeSig
+proposeSel = MkSel 0x01234567
 
-%foreign "evm:revert"
-prim__revert : Integer -> Integer -> PrimIO ()
+||| getHeader(uint256,uint256) -> bytes32
+public export
+getHeaderSig : Sig
+getHeaderSig = MkSig "getHeader" [TUint256, TUint256] [TBytes32]
 
-%foreign "evm:calldataload"
-prim__calldataload : Integer -> PrimIO Integer
+public export
+getHeaderSel : Sel getHeaderSig
+getHeaderSel = MkSel 0x12345678
 
-%foreign "evm:return"
-prim__return : Integer -> Integer -> PrimIO ()
+||| getProposalCount() -> uint256
+public export
+getProposalCountSig : Sig
+getProposalCountSig = MkSig "getProposalCount" [] [TUint256]
 
-timestamp : IO Integer
-timestamp = primIO prim__timestamp
-
-caller : IO Integer
-caller = primIO prim__caller
-
-evmRevert : Integer -> Integer -> IO ()
-evmRevert off len = primIO (prim__revert off len)
-
-proposeCalldataload : Integer -> IO Integer
-proposeCalldataload off = primIO (prim__calldataload off)
-
-evmReturn : Integer -> Integer -> IO ()
-evmReturn off len = primIO (prim__return off len)
-
--- =============================================================================
--- Function Selectors
--- =============================================================================
-
-||| propose(bytes32) -> 0x01234567
-SEL_PROPOSE : Integer
-SEL_PROPOSE = 0x01234567
-
-||| getHeader(uint256,uint256) -> 0x12345678
-SEL_GET_HEADER : Integer
-SEL_GET_HEADER = 0x12345678
-
-||| getProposalCount() -> 0x23456789
-SEL_GET_PROPOSAL_COUNT : Integer
-SEL_GET_PROPOSAL_COUNT = 0x23456789
-
--- =============================================================================
--- Entry Point Helpers
--- =============================================================================
-
-||| Extract function selector from calldata (first 4 bytes)
-getSelector : IO Integer
-getSelector = do
-  data_ <- proposeCalldataload 0
-  pure (data_ `div` 0x100000000000000000000000000000000000000000000000000000000)
-
-||| Return a uint256 value
-returnUint : Integer -> IO ()
-returnUint val = do
-  mstore 0 val
-  evmReturn 0 32
+public export
+getProposalCountSel : Sel getProposalCountSig
+getProposalCountSel = MkSel 0x23456789
 
 -- =============================================================================
 -- Header Storage
@@ -110,7 +81,7 @@ getCommandSlot pid cid = do
   keccak256 0 64
 
 -- =============================================================================
--- Proposal Creation
+-- Proposal Creation (Core Logic)
 -- =============================================================================
 
 ||| Initialize proposal metadata
@@ -159,53 +130,53 @@ createProposal headerMetadata = do
 
   pure pid
 
--- =============================================================================
--- Entry Point
--- =============================================================================
+||| Propose function with compile-time member proof
+||| REQ_PROPOSE_001: Members can create proposals with header metadata
+||| Type-safe version: caller must provide proof of membership
+export
+proposeWithProof : IsMember callerAddr -> MetadataCid -> IO ProposalId
+proposeWithProof _ headerMetadata = createProposal headerMetadata
 
-||| Propose function (entry point)
+||| Propose function (runtime checked version for entry points)
 ||| REQ_PROPOSE_001: Members can create proposals with header metadata
 export
-propose : MetadataCid -> IO ProposalId
+propose : MetadataCid -> IO (Outcome ProposalId)
 propose headerMetadata = do
-  -- Access control: onlyMember
   callerAddr <- caller
-  member <- isMember callerAddr
-
-  if not member
-    then do
-      -- Revert: YouAreNotTheMember
-      evmRevert 0 0
-      pure 0
-    else do
-      createProposal headerMetadata
+  proofResult <- requireMemberProof callerAddr
+  case proofResult of
+    Fail c e => pure (Fail c e)
+    Ok _ => do
+      -- Proof verified, proceed with proposal creation
+      pid <- createProposal headerMetadata
+      pure (Ok pid)
 
 -- =============================================================================
--- Main Entry Point
+-- Entry Points
 -- =============================================================================
 
-||| Main entry point for Propose contract
+||| Entry: propose(bytes32) -> uint256
 export
-main : IO ()
-main = do
-  selector <- getSelector
+proposeEntry : Entry proposeSig
+proposeEntry = MkEntry proposeSel $ do
+  headerMetadata <- runDecoder decodeBytes32
+  result <- propose (bytes32Value headerMetadata)
+  case result of
+    Ok pid => returnUint pid
+    Fail _ _ => evmRevert 0 0
 
-  if selector == SEL_PROPOSE
-    then do
-      headerMetadata <- proposeCalldataload 4
-      pid <- propose headerMetadata
-      returnUint pid
+||| Entry: getHeader(uint256,uint256) -> bytes32
+export
+getHeaderEntry : Entry getHeaderSig
+getHeaderEntry = MkEntry getHeaderSel $ do
+  pid <- runDecoder decodeUint256
+  hid <- runDecoder decodeUint256
+  metadata <- getHeaderMetadata (uint256Value pid) (uint256Value hid)
+  returnUint metadata
 
-    else if selector == SEL_GET_HEADER
-    then do
-      pid <- proposeCalldataload 4
-      hid <- proposeCalldataload 36
-      metadata <- getHeaderMetadata pid hid
-      returnUint metadata
-
-    else if selector == SEL_GET_PROPOSAL_COUNT
-    then do
-      count <- getProposalCount
-      returnUint count
-
-    else evmRevert 0 0
+||| Entry: getProposalCount() -> uint256
+export
+getProposalCountEntry : Entry getProposalCountSig
+getProposalCountEntry = MkEntry getProposalCountSel $ do
+  count <- getProposalCount
+  returnUint count

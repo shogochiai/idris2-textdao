@@ -2,83 +2,39 @@
 ||| REQ_EXECUTE_001: Execute approved proposals
 module TextDAO.Functions.Execute.Execute
 
+import public Subcontract.Core.Entry
+import Subcontract.Core.ABI.Decoder
+import public Subcontract.Core.Outcome
 import TextDAO.Storages.Schema
 import TextDAO.Functions.Fork.Fork
+import public TextDAO.Security.AccessControl
+import public TextDAO.Security.Reentrancy
+
+-- Note: EVM primitives now come from TextDAO.Storages.Schema via Subcontract.Core.Storable
 
 %default covering
 
 -- =============================================================================
--- EVM Primitives
+-- Function Signatures
 -- =============================================================================
 
-%foreign "evm:caller"
-prim__caller : PrimIO Integer
+||| execute(uint256) -> bool
+public export
+executeSig : Sig
+executeSig = MkSig "execute" [TUint256] [TBool]
 
-%foreign "evm:revert"
-prim__revert : Integer -> Integer -> PrimIO ()
+public export
+executeSel : Sel executeSig
+executeSel = MkSel 0xe0123456
 
-%foreign "evm:calldataload"
-prim__calldataload : Integer -> PrimIO Integer
+||| isExecuted(uint256) -> bool
+public export
+isExecutedSig : Sig
+isExecutedSig = MkSig "isExecuted" [TUint256] [TBool]
 
-%foreign "evm:return"
-prim__return : Integer -> Integer -> PrimIO ()
-
-%foreign "evm:call"
-prim__call : Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> PrimIO Integer
-
-%foreign "evm:log1"
-prim__log1 : Integer -> Integer -> Integer -> PrimIO ()
-
-caller : IO Integer
-caller = primIO prim__caller
-
-evmRevert : Integer -> Integer -> IO ()
-evmRevert off len = primIO (prim__revert off len)
-
-calldataload : Integer -> IO Integer
-calldataload off = primIO (prim__calldataload off)
-
-evmReturn : Integer -> Integer -> IO ()
-evmReturn off len = primIO (prim__return off len)
-
-evmCall : Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> IO Integer
-evmCall gas addr value argsOffset argsSize retOffset retSize =
-  primIO (prim__call gas addr value argsOffset argsSize retOffset retSize)
-
-evmLog1 : Integer -> Integer -> Integer -> IO ()
-evmLog1 off len topic = primIO (prim__log1 off len topic)
-
--- =============================================================================
--- Function Selectors
--- =============================================================================
-
-||| execute(uint256) -> 0xe0123456
-SEL_EXECUTE : Integer
-SEL_EXECUTE = 0xe0123456
-
-||| isExecuted(uint256) -> 0xe1234567
-SEL_IS_EXECUTED : Integer
-SEL_IS_EXECUTED = 0xe1234567
-
--- =============================================================================
--- Entry Point Helpers
--- =============================================================================
-
-||| Extract function selector from calldata (first 4 bytes)
-getSelector : IO Integer
-getSelector = do
-  data_ <- calldataload 0
-  pure (data_ `div` 0x100000000000000000000000000000000000000000000000000000000)
-
-||| Return a uint256 value
-returnUint : Integer -> IO ()
-returnUint val = do
-  mstore 0 val
-  evmReturn 0 32
-
-||| Return a boolean value
-returnBool : Bool -> IO ()
-returnBool b = returnUint (if b then 1 else 0)
+public export
+isExecutedSel : Sel isExecutedSig
+isExecutedSel = MkSel 0xe1234567
 
 -- =============================================================================
 -- Event Topics
@@ -89,7 +45,7 @@ EVENT_PROPOSAL_EXECUTED : Integer
 EVENT_PROPOSAL_EXECUTED = 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
 
 -- =============================================================================
--- Execute Functions
+-- Execute Core Logic
 -- =============================================================================
 
 ||| Check if proposal has been approved
@@ -99,73 +55,91 @@ isProposalApproved pid = do
   approvedHeader <- getApprovedHeaderId pid
   pure (approvedHeader > 0)
 
+||| Execute with compile-time proofs and reentrancy protection
+||| REQ_EXECUTE_001: Execute approved proposals
+||| Type-safe version: requires proof of approval, not-executed, and lock
+export
+executeWithProof : ExecuteLock Locked
+                -> IsApproved pid
+                -> NotExecuted pid
+                -> ProposalId
+                -> IO Bool
+executeWithProof _ _ _ pid = do
+  -- Get approved command
+  approvedCmdId <- getApprovedCmdId pid
+  actionData <- getCommandActionData pid approvedCmdId
+
+  -- Execute the action (simplified: just mark as executed)
+  -- CEI pattern: Checks done via proofs, Effects before Interactions
+  setFullyExecuted pid True
+
+  -- Emit ProposalExecuted event
+  mstore 0 pid
+  log1 0 32 EVENT_PROPOSAL_EXECUTED
+
+  -- External interaction would happen here (protected by lock)
+  -- In real implementation, would decode and execute action
+
+  pure True
+
 ||| Execute the approved command
 ||| REQ_EXECUTE_001: Execute approved proposals
+||| Runtime checked version with reentrancy protection
 export
-execute : ProposalId -> IO Bool
+execute : ProposalId -> IO (Outcome Bool)
 execute pid = do
-  -- Check if proposal is approved
-  approved <- isProposalApproved pid
-  if not approved
-    then do
-      evmRevert 0 0  -- ProposalNotApproved
-      pure False
-    else do
-      -- Check if already executed
-      executed <- isFullyExecuted pid
-      if executed
-        then do
-          evmRevert 0 0  -- ProposalAlreadyExecuted
-          pure False
-        else do
-          -- Get approved command
-          approvedCmdId <- getApprovedCmdId pid
-          actionData <- getCommandActionData pid approvedCmdId
+  -- Try to acquire reentrancy lock
+  mlock <- tryGetUnlocked
+  case mlock of
+    Nothing => pure (Fail Reentrancy (tagEvidence "ReentrancyDetected"))
+    Just unlocked => do
+      -- Check if proposal is approved
+      approvedResult <- requireApproved pid
+      case approvedResult of
+        Fail c e => pure (Fail c e)
+        Ok approvedProof => do
+          -- Check if already executed
+          notExecResult <- requireNotExecuted pid
+          case notExecResult of
+            Fail c e => pure (Fail c e)
+            Ok notExecProof => do
+              -- Execute with lock held
+              (success, _) <- withExecuteLock unlocked $ \locked => do
+                executeWithProof locked approvedProof notExecProof pid
+              pure (Ok success)
 
-          -- Execute the action (simplified: just mark as executed)
-          -- In real implementation, would decode and execute action
-          -- For now, we just mark the proposal as executed
-          setFullyExecuted pid True
-
-          -- Emit ProposalExecuted event
-          mstore 0 pid
-          evmLog1 0 32 EVENT_PROPOSAL_EXECUTED
-
-          pure True
-
-||| Execute action by calling target contract
+||| Execute action by calling target contract (with reentrancy protection)
 ||| Note: Simplified version - real implementation would parse action struct
+||| The lock parameter ensures this can only be called when lock is held
 export
-executeAction : Integer -> Integer -> Integer -> IO Bool
-executeAction target value callData = do
+executeAction : ExecuteLock Locked -> Integer -> Integer -> Integer -> IO Bool
+executeAction _ target value callData = do
   -- Store calldata in memory
   mstore 0 callData
 
-  -- Call target contract
-  result <- evmCall 100000 target value 0 32 32 32
+  -- Call target contract (safe: lock is held)
+  result <- call 100000 target value 0 32 32 32
 
   pure (result == 1)
 
 -- =============================================================================
--- Main Entry Point
+-- Entry Points
 -- =============================================================================
 
-||| Main entry point for Execute contract
+||| Entry: execute(uint256) -> bool
 export
-main : IO ()
-main = do
-  selector <- getSelector
+executeEntry : Entry executeSig
+executeEntry = MkEntry executeSel $ do
+  pid <- runDecoder decodeUint256
+  result <- execute (uint256Value pid)
+  case result of
+    Ok success => returnBool success
+    Fail _ _ => evmRevert 0 0
 
-  if selector == SEL_EXECUTE
-    then do
-      pid <- calldataload 4
-      success <- execute pid
-      returnBool success
-
-    else if selector == SEL_IS_EXECUTED
-    then do
-      pid <- calldataload 4
-      executed <- isFullyExecuted pid
-      returnBool executed
-
-    else evmRevert 0 0
+||| Entry: isExecuted(uint256) -> bool
+export
+isExecutedEntry : Entry isExecutedSig
+isExecutedEntry = MkEntry isExecutedSel $ do
+  pid <- runDecoder decodeUint256
+  executed <- isFullyExecuted (uint256Value pid)
+  returnBool executed

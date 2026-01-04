@@ -2,7 +2,12 @@
 ||| REQ_MEMBERS_001: Member registration and lookup
 module TextDAO.Functions.Members.Members
 
-import TextDAO.Storages.Schema
+import public Subcontract.Core.Entry
+import Subcontract.Core.ABI.Decoder
+import public Subcontract.Core.Outcome
+import public TextDAO.Storages.Schema
+
+-- Note: EVM primitives now come from TextDAO.Storages.Schema via Subcontract.Core.Storable
 
 %default covering
 
@@ -23,81 +28,53 @@ MEMBER_SIZE : Integer
 MEMBER_SIZE = 2
 
 -- =============================================================================
--- EVM Primitives
+-- Function Signatures
 -- =============================================================================
 
-%foreign "evm:caller"
-prim__caller : PrimIO Integer
+||| addMember(address,bytes32) -> uint256
+public export
+addMemberSig : Sig
+addMemberSig = MkSig "addMember" [TAddress, TBytes32] [TUint256]
 
-%foreign "evm:calldataload"
-prim__calldataload : Integer -> PrimIO Integer
+public export
+addMemberSel : Sel addMemberSig
+addMemberSel = MkSel 0xca6d56dc
 
-%foreign "evm:return"
-prim__return : Integer -> Integer -> PrimIO ()
+||| getMember(uint256) -> address
+public export
+getMemberSig : Sig
+getMemberSig = MkSig "getMember" [TUint256] [TAddress]
 
-%foreign "evm:revert"
-prim__revert : Integer -> Integer -> PrimIO ()
+public export
+getMemberSel : Sel getMemberSig
+getMemberSel = MkSel 0x9c0a0cd2
 
-caller : IO Integer
-caller = primIO prim__caller
+||| getMemberCount() -> uint256
+public export
+getMemberCountSig : Sig
+getMemberCountSig = MkSig "getMemberCount" [] [TUint256]
 
-calldataload : Integer -> IO Integer
-calldataload off = primIO (prim__calldataload off)
+public export
+getMemberCountSel : Sel getMemberCountSig
+getMemberCountSel = MkSel 0x997072f7
 
-evmReturn : Integer -> Integer -> IO ()
-evmReturn off len = primIO (prim__return off len)
+||| isMember(address) -> bool
+public export
+isMemberSig : Sig
+isMemberSig = MkSig "isMember" [TAddress] [TBool]
 
-evmRevert : Integer -> Integer -> IO ()
-evmRevert off len = primIO (prim__revert off len)
-
--- =============================================================================
--- Function Selectors
--- =============================================================================
-
-||| addMember(address,bytes32) -> 0xca6d56dc
-SEL_ADD_MEMBER : Integer
-SEL_ADD_MEMBER = 0xca6d56dc
-
-||| getMember(uint256) -> 0x9c0a0cd2
-SEL_GET_MEMBER : Integer
-SEL_GET_MEMBER = 0x9c0a0cd2
-
-||| getMemberCount() -> 0x997072f7
-SEL_GET_MEMBER_COUNT : Integer
-SEL_GET_MEMBER_COUNT = 0x997072f7
-
-||| isMember(address) -> 0xa230c524
-SEL_IS_MEMBER : Integer
-SEL_IS_MEMBER = 0xa230c524
+public export
+isMemberSel : Sel isMemberSig
+isMemberSel = MkSel 0xa230c524
 
 -- =============================================================================
--- Entry Point Helpers
--- =============================================================================
-
-||| Extract function selector from calldata (first 4 bytes)
-getSelector : IO Integer
-getSelector = do
-  data_ <- calldataload 0
-  pure (data_ `div` 0x100000000000000000000000000000000000000000000000000000000)
-
-||| Return a uint256 value
-returnUint : Integer -> IO ()
-returnUint val = do
-  mstore 0 val
-  evmReturn 0 32
-
-||| Return a boolean value
-returnBool : Bool -> IO ()
-returnBool b = returnUint (if b then 1 else 0)
-
--- =============================================================================
--- Member Read Functions
+-- Member Read Functions (Core Logic)
 -- =============================================================================
 
 ||| Get member address by index
 ||| REQ_MEMBERS_002
 export
-getMemberAddr : Integer -> IO Address
+getMemberAddr : Integer -> IO EvmAddr
 getMemberAddr index = do
   slot <- getMemberSlot index
   sload (slot + MEMBER_OFFSET_ADDR)
@@ -113,13 +90,13 @@ mutual
   ||| Check if address is a member (linear search)
   ||| REQ_MEMBERS_003
   export
-  isMember : Address -> IO Bool
+  isMember : EvmAddr -> IO Bool
   isMember addr = do
     count <- getMemberCount
     checkMemberLoop addr 0 count
 
   ||| Helper function for member lookup loop
-  checkMemberLoop : Address -> Integer -> Integer -> IO Bool
+  checkMemberLoop : EvmAddr -> Integer -> Integer -> IO Bool
   checkMemberLoop target idx count =
     if idx >= count
       then pure False
@@ -129,13 +106,13 @@ mutual
           else checkMemberLoop target (idx + 1) count
 
 -- =============================================================================
--- Member Write Functions
+-- Member Write Functions (Core Logic)
 -- =============================================================================
 
 ||| Add a new member
 ||| REQ_MEMBERS_004
 export
-addMember : Address -> MetadataCid -> IO Integer
+addMember : EvmAddr -> MetadataCid -> IO Integer
 addMember addr metadata = do
   count <- getMemberCount
   slot <- getMemberSlot count
@@ -151,47 +128,45 @@ addMember addr metadata = do
 ||| Revert if caller is not a member
 ||| REQ_MEMBERS_005
 export
-requireMember : Address -> IO Bool
+requireMember : EvmAddr -> IO (Outcome ())
 requireMember callerAddr = do
   member <- isMember callerAddr
   if member
-    then pure True
-    else do
-      evmRevert 0 0
-      pure False
+    then pure (Ok ())
+    else pure (Fail AuthViolation (tagEvidence "YouAreNotTheMember"))
 
 -- =============================================================================
--- Entry Point
+-- Entry Points
 -- =============================================================================
 
-||| Main entry point for Members contract
+||| Entry: addMember(address,bytes32) -> uint256
 export
-main : IO ()
-main = do
-  selector <- getSelector
+addMemberEntry : Entry addMemberSig
+addMemberEntry = MkEntry addMemberSel $ do
+  addr <- runDecoder decodeAddress
+  meta <- runDecoder decodeBytes32
+  idx <- addMember (addrValue addr) (bytes32Value meta)
+  returnUint idx
 
-  if selector == SEL_ADD_MEMBER
-    then do
-      memberAddr <- calldataload 4
-      metadataCid <- calldataload 36
-      idx <- addMember memberAddr metadataCid
-      returnUint idx
+||| Entry: getMember(uint256) -> address
+export
+getMemberEntry : Entry getMemberSig
+getMemberEntry = MkEntry getMemberSel $ do
+  index <- runDecoder decodeUint256
+  addr <- getMemberAddr (uint256Value index)
+  returnUint addr
 
-    else if selector == SEL_GET_MEMBER
-    then do
-      index <- calldataload 4
-      addr <- getMemberAddr index
-      returnUint addr
+||| Entry: getMemberCount() -> uint256
+export
+getMemberCountEntry : Entry getMemberCountSig
+getMemberCountEntry = MkEntry getMemberCountSel $ do
+  count <- getMemberCount
+  returnUint count
 
-    else if selector == SEL_GET_MEMBER_COUNT
-    then do
-      count <- getMemberCount
-      returnUint count
-
-    else if selector == SEL_IS_MEMBER
-    then do
-      addr <- calldataload 4
-      member <- isMember addr
-      returnBool member
-
-    else evmRevert 0 0
+||| Entry: isMember(address) -> bool
+export
+isMemberEntry : Entry isMemberSig
+isMemberEntry = MkEntry isMemberSel $ do
+  addr <- runDecoder decodeAddress
+  member <- isMember (addrValue addr)
+  returnBool member

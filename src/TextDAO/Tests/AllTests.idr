@@ -15,17 +15,9 @@ import TextDAO.Functions.Execute.Tests.ExecuteTest
 import TextDAO.Functions.Text.Tests.TextTest
 import TextDAO.Tests.EvmTest
 
+-- Note: EVM primitives (evmReturn, mstore, etc.) come from Schema via Storable
+
 %default covering
-
--- =============================================================================
--- EVM Return Primitive
--- =============================================================================
-
-%foreign "evm:return"
-prim__return : Integer -> Integer -> PrimIO ()
-
-evmReturn : Integer -> Integer -> IO ()
-evmReturn off len = primIO (prim__return off len)
 
 -- =============================================================================
 -- Simple Test Runner (No IO Output)
@@ -103,6 +95,7 @@ runAllTests = do
   t3 <- test_REQ_TALLY_003_notApproved
   t4 <- test_REQ_TALLY_004_approveProposal
   t5 <- test_REQ_TALLY_005_snapEpoch
+  t6 <- test_REQ_TALLY_006_finalTally_winner
 
   -- Run Fork tests
   f1 <- test_REQ_FORK_002_forkHeader
@@ -132,7 +125,7 @@ runAllTests = do
   finishTests [m1, m2, m3, m4, m5, m6, m7,
                p1, p2, p3, p4, p5,
                v1, v2, v3, v4, v5,
-               t1, t2, t3, t4, t5,
+               t1, t2, t3, t4, t5, t6,
                f1, f2, f3, f4,
                x1, x2, x3, x4,
                tx1, tx2, tx3, tx4,

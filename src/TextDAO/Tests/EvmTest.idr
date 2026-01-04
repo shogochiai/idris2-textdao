@@ -3,7 +3,7 @@
 module TextDAO.Tests.EvmTest
 
 import TextDAO.Storages.Schema
-import TextDAO.Functions.Members
+import TextDAO.Functions.Members.Members
 
 %default covering
 

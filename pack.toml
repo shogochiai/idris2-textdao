@@ -3,6 +3,11 @@ type = "local"
 path = "/Users/bob/code/idris2-textdao"
 ipkg = "idris2-textdao.ipkg"
 
+[custom.all.textdao-tests]
+type = "local"
+path = "/Users/bob/code/idris2-textdao"
+ipkg = "tests.ipkg"
+
 [custom.all.idris2-subcontract]
 type = "local"
 path = "/Users/bob/code/idris2-subcontract"

@@ -2,75 +2,38 @@
 ||| REQ_VOTE_001: Representatives can vote on proposals using RCV
 module TextDAO.Functions.Vote.Vote
 
+import public Subcontract.Core.Entry
+import Subcontract.Core.ABI.Decoder
+import public Subcontract.Core.Outcome
 import TextDAO.Storages.Schema
+import public TextDAO.Security.AccessControl
+
+-- Note: EVM primitives now come from TextDAO.Storages.Schema via Subcontract.Core.Storable
 
 %default covering
 
 -- =============================================================================
--- EVM Primitives
+-- Function Signatures
 -- =============================================================================
 
-%foreign "evm:timestamp"
-prim__timestamp : PrimIO Integer
+||| vote(uint256,uint256[3],uint256[3]) -> bool
+||| Note: Arrays are decoded as 6 consecutive uint256s
+public export
+voteSig : Sig
+voteSig = MkSig "vote" [TUint256, TUint256, TUint256, TUint256, TUint256, TUint256, TUint256] [TBool]
 
-%foreign "evm:caller"
-prim__caller : PrimIO Integer
+public export
+voteSel : Sel voteSig
+voteSel = MkSel 0x34567890
 
-%foreign "evm:revert"
-prim__revert : Integer -> Integer -> PrimIO ()
+||| isRep(uint256,address) -> bool
+public export
+isRepSig : Sig
+isRepSig = MkSig "isRep" [TUint256, TAddress] [TBool]
 
-timestamp : IO Integer
-timestamp = primIO prim__timestamp
-
-caller : IO Integer
-caller = primIO prim__caller
-
-evmRevert : Integer -> Integer -> IO ()
-evmRevert off len = primIO (prim__revert off len)
-
-%foreign "evm:calldataload"
-prim__calldataload : Integer -> PrimIO Integer
-
-%foreign "evm:return"
-prim__return : Integer -> Integer -> PrimIO ()
-
-calldataload : Integer -> IO Integer
-calldataload off = primIO (prim__calldataload off)
-
-evmReturn : Integer -> Integer -> IO ()
-evmReturn off len = primIO (prim__return off len)
-
--- =============================================================================
--- Function Selectors
--- =============================================================================
-
-||| vote(uint256,uint256[3],uint256[3]) -> 0x34567890
-SEL_VOTE : Integer
-SEL_VOTE = 0x34567890
-
-||| isRep(uint256,address) -> 0x56789012
-SEL_IS_REP : Integer
-SEL_IS_REP = 0x56789012
-
--- =============================================================================
--- Entry Point Helpers
--- =============================================================================
-
-||| Extract function selector from calldata (first 4 bytes)
-getSelector : IO Integer
-getSelector = do
-  data_ <- calldataload 0
-  pure (data_ `div` 0x100000000000000000000000000000000000000000000000000000000)
-
-||| Return a uint256 value
-returnUint : Integer -> IO ()
-returnUint val = do
-  mstore 0 val
-  evmReturn 0 32
-
-||| Return a boolean value
-returnBool : Bool -> IO ()
-returnBool b = returnUint (if b then 1 else 0)
+public export
+isRepSel : Sel isRepSig
+isRepSel = MkSel 0x56789012
 
 -- =============================================================================
 -- Vote Storage Layout
@@ -98,59 +61,18 @@ VOTE_OFFSET_CMD_2 : Integer
 VOTE_OFFSET_CMD_2 = 5
 
 -- =============================================================================
--- Representative Storage
+-- Representative Storage (now in Schema.idr, re-exported via import)
 -- =============================================================================
-
-||| Get representative slot by index
-||| Reps are stored in proposal meta at offset 0x40
-export
-getRepSlot : ProposalId -> Integer -> IO Integer
-getRepSlot pid index = do
-  metaSlot <- getProposalMetaSlot pid
-  let repsBaseSlot = metaSlot + 0x40
-  mstore 0 index
-  mstore 32 repsBaseSlot
-  keccak256 0 64
-
-||| Get representative count
-export
-getRepCount : ProposalId -> IO Integer
-getRepCount pid = do
-  metaSlot <- getProposalMetaSlot pid
-  sload (metaSlot + 0x40)
-
-||| Set representative count
-export
-setRepCount : ProposalId -> Integer -> IO ()
-setRepCount pid count = do
-  metaSlot <- getProposalMetaSlot pid
-  sstore (metaSlot + 0x40) count
-
-||| Get representative address by index
-export
-getRepAddr : ProposalId -> Integer -> IO Address
-getRepAddr pid index = do
-  slot <- getRepSlot pid index
-  sload slot
-
-||| Add representative to proposal
-export
-addRep : ProposalId -> Address -> IO ()
-addRep pid addr = do
-  count <- getRepCount pid
-  slot <- getRepSlot pid count
-  sstore slot addr
-  setRepCount pid (count + 1)
 
 ||| Check if address is a representative for proposal
 ||| REQ_VOTE_002
 export
-isRep : ProposalId -> Address -> IO Bool
+isRep : ProposalId -> EvmAddr -> IO Bool
 isRep pid addr = do
   count <- getRepCount pid
   checkRep addr 0 count
   where
-    checkRep : Address -> Integer -> Integer -> IO Bool
+    checkRep : EvmAddr -> Integer -> Integer -> IO Bool
     checkRep target idx cnt =
       if idx >= cnt
         then pure False
@@ -167,8 +89,21 @@ isRep pid addr = do
 ||| Store a vote
 ||| REQ_VOTE_003
 export
-storeVote : ProposalId -> Address -> (Integer, Integer, Integer) -> (Integer, Integer, Integer) -> IO ()
+storeVote : ProposalId -> EvmAddr -> (Integer, Integer, Integer) -> (Integer, Integer, Integer) -> IO ()
 storeVote pid voter (h0, h1, h2) (c0, c1, c2) = do
+  slot <- getVoteSlot pid voter
+  sstore (slot + VOTE_OFFSET_HEADER_0) h0
+  sstore (slot + VOTE_OFFSET_HEADER_1) h1
+  sstore (slot + VOTE_OFFSET_HEADER_2) h2
+  sstore (slot + VOTE_OFFSET_CMD_0) c0
+  sstore (slot + VOTE_OFFSET_CMD_1) c1
+  sstore (slot + VOTE_OFFSET_CMD_2) c2
+
+||| Store a vote with explicit arguments (workaround for tuple compilation issues)
+||| Takes 6 individual Integers instead of 2 tuples
+export
+storeVoteDirect : ProposalId -> EvmAddr -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> IO ()
+storeVoteDirect pid voter h0 h1 h2 c0 c1 c2 = do
   slot <- getVoteSlot pid voter
   sstore (slot + VOTE_OFFSET_HEADER_0) h0
   sstore (slot + VOTE_OFFSET_HEADER_1) h1
@@ -179,7 +114,7 @@ storeVote pid voter (h0, h1, h2) (c0, c1, c2) = do
 
 ||| Read a vote
 export
-readVote : ProposalId -> Address -> IO ((Integer, Integer, Integer), (Integer, Integer, Integer))
+readVote : ProposalId -> EvmAddr -> IO ((Integer, Integer, Integer), (Integer, Integer, Integer))
 readVote pid voter = do
   slot <- getVoteSlot pid voter
   h0 <- sload (slot + VOTE_OFFSET_HEADER_0)
@@ -189,6 +124,20 @@ readVote pid voter = do
   c1 <- sload (slot + VOTE_OFFSET_CMD_1)
   c2 <- sload (slot + VOTE_OFFSET_CMD_2)
   pure ((h0, h1, h2), (c0, c1, c2))
+
+||| Read vote header at specific rank (workaround for tuple compilation issues)
+export
+readVoteHeader : ProposalId -> EvmAddr -> Integer -> IO Integer
+readVoteHeader pid voter rank = do
+  slot <- getVoteSlot pid voter
+  sload (slot + rank)
+
+||| Read vote command at specific rank (workaround for tuple compilation issues)
+export
+readVoteCommand : ProposalId -> EvmAddr -> Integer -> IO Integer
+readVoteCommand pid voter rank = do
+  slot <- getVoteSlot pid voter
+  sload (slot + VOTE_OFFSET_CMD_0 + rank)
 
 -- =============================================================================
 -- Vote Validation
@@ -218,81 +167,86 @@ validateCommandId pid cid = do
   pure (cid >= 0 && cid <= cmdCount)
 
 -- =============================================================================
--- Entry Point
+-- Vote Core Logic
 -- =============================================================================
+
+||| Vote on a proposal with compile-time proofs
+||| REQ_VOTE_001: Representatives can cast ranked votes
+||| Type-safe version: requires proof of rep status and not expired
+export
+voteWithProof : IsRep pid callerAddr
+             -> NotExpired pid
+             -> ProposalId
+             -> (Integer, Integer, Integer)
+             -> (Integer, Integer, Integer)
+             -> IO (Outcome Bool)
+voteWithProof repProof _ pid rankedHeaders rankedCommands = do
+  let voterAddr = repAddr repProof
+  -- Validate header IDs
+  let (h0, h1, h2) = rankedHeaders
+  validH0 <- validateHeaderId pid h0
+  validH1 <- validateHeaderId pid h1
+  validH2 <- validateHeaderId pid h2
+
+  -- Validate command IDs
+  let (c0, c1, c2) = rankedCommands
+  validC0 <- validateCommandId pid c0
+  validC1 <- validateCommandId pid c1
+  validC2 <- validateCommandId pid c2
+
+  if not (validH0 && validH1 && validH2 && validC0 && validC1 && validC2)
+    then pure (Fail InvariantViolation (tagEvidence "InvalidId"))
+    else do
+      -- Store vote
+      storeVote pid voterAddr rankedHeaders rankedCommands
+      pure (Ok True)
 
 ||| Vote on a proposal (RCV: Ranked Choice Voting)
 ||| REQ_VOTE_001: Representatives can cast ranked votes
+||| Runtime checked version for entry points
 export
-vote : ProposalId -> (Integer, Integer, Integer) -> (Integer, Integer, Integer) -> IO Bool
+vote : ProposalId -> (Integer, Integer, Integer) -> (Integer, Integer, Integer) -> IO (Outcome Bool)
 vote pid rankedHeaders rankedCommands = do
-  -- Access control: onlyReps
   callerAddr <- caller
-  rep <- isRep pid callerAddr
-
-  if not rep
-    then do
-      -- Revert: YouAreNotTheRep
-      evmRevert 0 0
-      pure False
-    else do
-      -- Check proposal not expired
-      expired <- isProposalExpired pid
-      if expired
-        then do
-          -- Revert: ProposalAlreadyExpired
-          evmRevert 0 0
-          pure False
-        else do
-          -- Validate header IDs
-          let (h0, h1, h2) = rankedHeaders
-          validH0 <- validateHeaderId pid h0
-          validH1 <- validateHeaderId pid h1
-          validH2 <- validateHeaderId pid h2
-
-          -- Validate command IDs
-          let (c0, c1, c2) = rankedCommands
-          validC0 <- validateCommandId pid c0
-          validC1 <- validateCommandId pid c1
-          validC2 <- validateCommandId pid c2
-
-          if not (validH0 && validH1 && validH2 && validC0 && validC1 && validC2)
-            then do
-              -- Revert: InvalidId
-              evmRevert 0 0
-              pure False
-            else do
-              -- Store vote
-              storeVote pid callerAddr rankedHeaders rankedCommands
-              pure True
+  -- Check rep status
+  repResult <- requireRepProof pid callerAddr
+  case repResult of
+    Fail c e => pure (Fail c e)
+    Ok repProof => do
+      -- Check not expired
+      expResult <- requireNotExpired pid
+      case expResult of
+        Fail c e => pure (Fail c e)
+        Ok notExpiredProof =>
+          voteWithProof repProof notExpiredProof pid rankedHeaders rankedCommands
 
 -- =============================================================================
--- Main Entry Point
+-- Entry Points
 -- =============================================================================
 
-||| Main entry point for Vote contract
+||| Entry: vote(uint256,uint256[3],uint256[3]) -> bool
 export
-main : IO ()
-main = do
-  selector <- getSelector
+voteEntry : Entry voteSig
+voteEntry = MkEntry voteSel $ do
+  pid <- runDecoder decodeUint256
+  h0 <- runDecoder decodeUint256
+  h1 <- runDecoder decodeUint256
+  h2 <- runDecoder decodeUint256
+  c0 <- runDecoder decodeUint256
+  c1 <- runDecoder decodeUint256
+  c2 <- runDecoder decodeUint256
+  result <- vote (uint256Value pid)
+                 (uint256Value h0, uint256Value h1, uint256Value h2)
+                 (uint256Value c0, uint256Value c1, uint256Value c2)
+  case result of
+    Ok success => returnBool success
+    Fail _ _ => evmRevert 0 0
 
-  if selector == SEL_VOTE
-    then do
-      pid <- calldataload 4
-      h0 <- calldataload 36
-      h1 <- calldataload 68
-      h2 <- calldataload 100
-      c0 <- calldataload 132
-      c1 <- calldataload 164
-      c2 <- calldataload 196
-      success <- vote pid (h0, h1, h2) (c0, c1, c2)
-      returnBool success
-
-    else if selector == SEL_IS_REP
-    then do
-      pid <- calldataload 4
-      addr <- calldataload 36
-      rep <- isRep pid addr
-      returnBool rep
-
-    else evmRevert 0 0
+||| Entry: isRep(uint256,address) -> bool
+export
+isRepEntry : Entry isRepSig
+isRepEntry = MkEntry isRepSel $ do
+  pid <- runDecoder decodeUint256
+  addr <- runDecoder decodeAddress
+  rep <- isRep (uint256Value pid) (addrValue addr)
+  returnBool rep

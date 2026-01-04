@@ -31,9 +31,8 @@ test_REQ_VOTE_001_castVote = do
   addRep pid repAddr
 
   -- Act: store vote directly (simulating vote function)
-  let rankedHeaders = (1, 2, 3)
-  let rankedCommands = (3, 2, 1)
-  storeVote pid repAddr rankedHeaders rankedCommands
+  -- Using storeVoteDirect to avoid tuple compilation issues
+  storeVoteDirect pid repAddr 1 2 3 3 2 1
 
   -- Assert: vote stored correctly
   ((h0, h1, h2), (c0, c1, c2)) <- readVote pid repAddr
@@ -103,8 +102,9 @@ test_REQ_VOTE_003_multipleVotes = do
   addRep pid rep2
 
   -- Store different votes
-  storeVote pid rep1 (1, 2, 3) (1, 2, 3)
-  storeVote pid rep2 (3, 2, 1) (3, 2, 1)
+  -- Using storeVoteDirect to avoid tuple compilation issues
+  storeVoteDirect pid rep1 1 2 3 1 2 3
+  storeVoteDirect pid rep2 3 2 1 3 2 1
 
   -- Assert: votes are independent
   ((h1_0, h1_1, h1_2), (c1_0, c1_1, c1_2)) <- readVote pid rep1
@@ -154,10 +154,11 @@ test_vote_update = do
   addRep pid repAddr
 
   -- Initial vote
-  storeVote pid repAddr (1, 2, 3) (1, 2, 3)
+  -- Using storeVoteDirect to avoid tuple compilation issues
+  storeVoteDirect pid repAddr 1 2 3 1 2 3
 
   -- Update vote
-  storeVote pid repAddr (3, 1, 2) (2, 3, 1)
+  storeVoteDirect pid repAddr 3 1 2 2 3 1
 
   -- Assert: latest vote stored
   ((h0, h1, h2), (c0, c1, c2)) <- readVote pid repAddr
@@ -191,8 +192,9 @@ test_vote_proposal_isolation = do
   addRep pid2 repAddr
 
   -- Different votes in each proposal
-  storeVote pid1 repAddr (1, 2, 3) (1, 2, 3)
-  storeVote pid2 repAddr (3, 2, 1) (3, 2, 1)
+  -- Using storeVoteDirect to avoid tuple compilation issues
+  storeVoteDirect pid1 repAddr 1 2 3 1 2 3
+  storeVoteDirect pid2 repAddr 3 2 1 3 2 1
 
   -- Assert: votes are isolated
   ((h1, _, _), _) <- readVote pid1 repAddr

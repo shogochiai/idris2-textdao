@@ -1,6 +1,8 @@
 ||| TextDAO Cheat Codes
 ||| Foundry-compatible EVM state manipulation for testing
 |||
+||| REQ_TEST_001: Provide test infrastructure for EVM state manipulation
+|||
 ||| Required for testing uncovered functions:
 ||| - Members: isMember, addMember, checkMemberLoop
 ||| - Vote: vote, isRep, isProposalExpired
@@ -31,7 +33,7 @@ VM_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
 public export
 record PrankState where
   constructor MkPrankState
-  prankedAddress : Maybe Address
+  prankedAddress : Maybe EvmAddr
   isPersistent : Bool
 
 ||| Initialize prank state
@@ -42,13 +44,13 @@ initPrankState = MkPrankState Nothing False
 ||| Prank: set msg.sender for next call
 ||| vm.prank(address) in Foundry
 export
-prank : Address -> PrankState -> PrankState
+prank : EvmAddr -> PrankState -> PrankState
 prank addr st = { prankedAddress := Just addr, isPersistent := False } st
 
 ||| StartPrank: set msg.sender until stopPrank
 ||| vm.startPrank(address) in Foundry
 export
-startPrank : Address -> PrankState -> PrankState
+startPrank : EvmAddr -> PrankState -> PrankState
 startPrank addr st = { prankedAddress := Just addr, isPersistent := True } st
 
 ||| StopPrank: clear persistent prank
@@ -58,7 +60,7 @@ stopPrank st = { prankedAddress := Nothing, isPersistent := False } st
 
 ||| Get effective caller (pranked or real)
 export
-getEffectiveCaller : PrankState -> Address -> Address
+getEffectiveCaller : PrankState -> EvmAddr -> EvmAddr
 getEffectiveCaller st realCaller =
   case st.prankedAddress of
     Nothing => realCaller
@@ -72,7 +74,7 @@ getEffectiveCaller st realCaller =
 ||| vm.deal(address, amount) in Foundry
 ||| Storage slot: keccak256(addr) in balance mapping (simplified)
 export
-deal : Address -> Integer -> IO ()
+deal : EvmAddr -> Integer -> IO ()
 deal addr amount = do
   -- In real EVM, balance is in state trie, not storage
   -- For testing, we simulate by storing in a reserved slot
@@ -85,7 +87,7 @@ deal addr amount = do
 ||| Hoax: deal + prank combined
 ||| vm.hoax(address, amount) in Foundry
 export
-hoax : Address -> Integer -> PrankState -> IO PrankState
+hoax : EvmAddr -> Integer -> PrankState -> IO PrankState
 hoax addr amount st = do
   deal addr amount
   pure (prank addr st)
@@ -236,7 +238,7 @@ checkRevertExpectation st =
 ||| Setup a member in storage (for testing isMember, checkMemberLoop)
 ||| Sets: memberCount, member[index].addr, member[index].metadata
 export
-setupMember : Integer -> Address -> MetadataCid -> IO ()
+setupMember : Integer -> EvmAddr -> MetadataCid -> IO ()
 setupMember index addr metadata = do
   -- Get current count and increment
   count <- sload SLOT_MEMBER_COUNT
@@ -253,10 +255,10 @@ setupMember index addr metadata = do
 
 ||| Setup multiple members
 export
-setupMembers : List (Address, MetadataCid) -> IO ()
+setupMembers : List (EvmAddr, MetadataCid) -> IO ()
 setupMembers members = go 0 members
   where
-    go : Integer -> List (Address, MetadataCid) -> IO ()
+    go : Integer -> List (EvmAddr, MetadataCid) -> IO ()
     go _ [] = pure ()
     go idx ((addr, meta) :: rest) = do
       setupMember idx addr meta
@@ -278,7 +280,7 @@ setupProposalMeta pid createdAt expiration snapInterval = do
 
 ||| Setup representative for proposal (for testing vote, isRep)
 export
-setupRep : ProposalId -> Integer -> Address -> IO ()
+setupRep : ProposalId -> Integer -> EvmAddr -> IO ()
 setupRep pid index addr = do
   metaSlot <- getProposalMetaSlot pid
   let repsCountSlot = metaSlot + 0x40

@@ -6,6 +6,7 @@ import TextDAO.Storages.Schema
 import TextDAO.Functions.Vote.Vote
 import TextDAO.Functions.Propose.Propose
 import TextDAO.Functions.Tally.Tally
+import Subcontract.Core.Outcome
 
 import Data.List
 
@@ -80,9 +81,10 @@ test_REQ_TALLY_002_calcScores = do
   addRep pid rep2
 
   -- Rep1 votes: headers [1,2,3], commands [3,2,1]
-  storeVote pid rep1 (1, 2, 3) (3, 2, 1)
-  -- Rep2 votes: headers [3,1,2], commands [3,2,1]
-  storeVote pid rep2 (3, 1, 4) (3, 2, 1)
+  -- Using storeVoteDirect to avoid tuple compilation issues
+  storeVoteDirect pid rep1 1 2 3 3 2 1
+  -- Rep2 votes: headers [3,1,4], commands [3,2,1]
+  storeVoteDirect pid rep2 3 1 4 3 2 1
 
   -- Calculate scores
   (headerScores, cmdScores) <- calcRCVScores pid
@@ -195,12 +197,17 @@ test_REQ_TALLY_006_finalTally_winner = do
   addRep pid rep3
 
   -- All vote for header 1, command 1 as first choice
-  storeVote pid rep1 (1, 2, 0) (1, 2, 0)
-  storeVote pid rep2 (1, 2, 0) (1, 2, 0)
-  storeVote pid rep3 (1, 2, 0) (1, 2, 0)
+  -- Using storeVoteDirect to avoid tuple compilation issues
+  -- Args: pid voter h0 h1 h2 c0 c1 c2
+  storeVoteDirect pid rep1 1 2 0 1 2 0
+  storeVoteDirect pid rep2 1 2 0 1 2 0
+  storeVoteDirect pid rep3 1 2 0 1 2 0
 
-  -- Final tally
-  success <- finalTally pid
+  -- Final tally (returns Outcome Bool)
+  result <- finalTally pid
+  let success = case result of
+                  Ok b => b
+                  Fail _ _ => False
 
   -- Assert
   approvedHeader <- getApprovedHeaderId pid
@@ -229,14 +236,18 @@ test_finalTally_tie = do
   addRep pid rep2
 
   -- Rep1 votes header 1, Rep2 votes header 2 (tie)
-  storeVote pid rep1 (1, 2, 0) (1, 2, 0)
-  storeVote pid rep2 (2, 1, 0) (1, 2, 0)
+  -- Using storeVoteDirect to avoid tuple compilation issues
+  storeVoteDirect pid rep1 1 2 0 1 2 0
+  storeVoteDirect pid rep2 2 1 0 1 2 0
 
   -- Get initial expiration
   initialExpiration <- getProposalExpiration pid
 
   -- Final tally (should extend due to header tie)
-  success <- finalTally pid
+  result <- finalTally pid
+  let success = case result of
+                  Ok b => b
+                  Fail _ _ => False
 
   -- Assert: not approved, expiration extended
   finalExpiration <- getProposalExpiration pid

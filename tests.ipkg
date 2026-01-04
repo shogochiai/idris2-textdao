@@ -1,7 +1,7 @@
-package idris2-textdao
+package textdao-tests
 version = "0.1.0"
 authors = "bob"
-brief = "TextDAO smart contracts in Idris2 targeting EVM via idris2-evm"
+brief = "TextDAO test runner"
 
 depends = base, contrib, idris2-subcontract
 

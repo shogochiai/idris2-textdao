@@ -6,12 +6,18 @@ import TextDAO.Storages.Schema
 import TextDAO.Functions.Propose.Propose
 import TextDAO.Functions.Tally.Tally
 import TextDAO.Functions.Text.Text
+import Subcontract.Core.Outcome
 
 %default covering
 
 -- =============================================================================
 -- REQ_TEXT_001: Create text from approved proposal
 -- =============================================================================
+
+||| Helper to extract value from Outcome
+extractTextId : Outcome Integer -> Integer
+extractTextId (Ok tid) = tid
+extractTextId (Fail _ _) = 0
 
 ||| Test: Create text stores metadata correctly
 ||| REQ_TEXT_001
@@ -25,8 +31,9 @@ test_REQ_TEXT_001_createText = do
   -- Approve proposal
   approveProposal pid 1 1
 
-  -- Create text
-  textId <- createText pid 0xabcdef1234567890
+  -- Create text (returns Outcome Integer)
+  result <- createText pid 0xabcdef1234567890
+  let textId = extractTextId result
 
   -- Verify
   metadata <- getTextMetadata textId
@@ -48,7 +55,7 @@ test_REQ_TEXT_002_textCount = do
   -- Get initial count
   initialCount <- getTextCount
 
-  -- Create text
+  -- Create text (returns Outcome Integer)
   _ <- createText pid 0xaaaa
 
   -- Verify count increased
@@ -71,9 +78,11 @@ test_text_multiple = do
   pid2 <- createProposal 0x2222
   approveProposal pid2 1 1
 
-  -- Create texts
-  t1 <- createText pid1 0xaaaa
-  t2 <- createText pid2 0xbbbb
+  -- Create texts (returns Outcome Integer)
+  r1 <- createText pid1 0xaaaa
+  r2 <- createText pid2 0xbbbb
+  let t1 = extractTextId r1
+  let t2 = extractTextId r2
 
   -- Verify texts are independent
   m1 <- getTextMetadata t1
@@ -90,8 +99,9 @@ test_text_proposal_link = do
   pid <- createProposal 0x1111
   approveProposal pid 1 1
 
-  -- Create text
-  textId <- createText pid 0xcccc
+  -- Create text (returns Outcome Integer)
+  result <- createText pid 0xcccc
+  let textId = extractTextId result
 
   -- Verify proposal link
   storedPid <- getTextProposalId textId

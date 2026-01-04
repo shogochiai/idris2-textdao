@@ -2,80 +2,57 @@
 ||| REQ_TALLY_001: RCV vote counting and proposal approval
 module TextDAO.Functions.Tally.Tally
 
+import public Subcontract.Core.Entry
+import Subcontract.Core.ABI.Decoder
+import public Subcontract.Core.Outcome
 import TextDAO.Storages.Schema
 import TextDAO.Functions.Vote.Vote
 
 import Data.List
 
+-- Note: EVM primitives now come from TextDAO.Storages.Schema via Subcontract.Core.Storable
+
 %default covering
 
 -- =============================================================================
--- EVM Primitives
+-- Function Signatures
 -- =============================================================================
 
-%foreign "evm:timestamp"
-prim__timestamp : PrimIO Integer
+||| tally(uint256) -> void
+public export
+tallySig : Sig
+tallySig = MkSig "tally" [TUint256] []
 
-%foreign "evm:revert"
-prim__revert : Integer -> Integer -> PrimIO ()
+public export
+tallySel : Sel tallySig
+tallySel = MkSel 0x67890123
 
-timestamp : IO Integer
-timestamp = primIO prim__timestamp
+||| snap(uint256) -> void
+public export
+snapSig : Sig
+snapSig = MkSig "snap" [TUint256] []
 
-evmRevert : Integer -> Integer -> IO ()
-evmRevert off len = primIO (prim__revert off len)
+public export
+snapSel : Sel snapSig
+snapSel = MkSel 0x78901234
 
-%foreign "evm:calldataload"
-prim__calldataload : Integer -> PrimIO Integer
+||| isApproved(uint256) -> bool
+public export
+isApprovedSig : Sig
+isApprovedSig = MkSig "isApproved" [TUint256] [TBool]
 
-%foreign "evm:return"
-prim__return : Integer -> Integer -> PrimIO ()
+public export
+isApprovedSel : Sel isApprovedSig
+isApprovedSel = MkSel 0x89012345
 
-calldataload : Integer -> IO Integer
-calldataload off = primIO (prim__calldataload off)
+||| tallyAndExecute(uint256) -> bool
+public export
+tallyAndExecuteSig : Sig
+tallyAndExecuteSig = MkSig "tallyAndExecute" [TUint256] [TBool]
 
-evmReturn : Integer -> Integer -> IO ()
-evmReturn off len = primIO (prim__return off len)
-
--- =============================================================================
--- Function Selectors
--- =============================================================================
-
-||| tally(uint256) -> 0x67890123
-SEL_TALLY : Integer
-SEL_TALLY = 0x67890123
-
-||| snap(uint256) -> 0x78901234
-SEL_SNAP : Integer
-SEL_SNAP = 0x78901234
-
-||| isApproved(uint256) -> 0x89012345
-SEL_IS_APPROVED : Integer
-SEL_IS_APPROVED = 0x89012345
-
-||| tallyAndExecute(uint256) -> 0x90123456
-SEL_TALLY_AND_EXECUTE : Integer
-SEL_TALLY_AND_EXECUTE = 0x90123456
-
--- =============================================================================
--- Entry Point Helpers
--- =============================================================================
-
-||| Extract function selector from calldata (first 4 bytes)
-getSelector : IO Integer
-getSelector = do
-  data_ <- calldataload 0
-  pure (data_ `div` 0x100000000000000000000000000000000000000000000000000000000)
-
-||| Return a uint256 value
-returnUint : Integer -> IO ()
-returnUint val = do
-  mstore 0 val
-  evmReturn 0 32
-
-||| Return a boolean value
-returnBool : Bool -> IO ()
-returnBool b = returnUint (if b then 1 else 0)
+public export
+tallyAndExecuteSel : Sel tallyAndExecuteSig
+tallyAndExecuteSel = MkSel 0x90123456
 
 -- =============================================================================
 -- RCV Score Calculation
@@ -134,7 +111,7 @@ findTopScorer (MkScoreMap scores) =
 
 ||| Accumulate votes from a single representative
 export
-accumulateVote : ProposalId -> Address -> (ScoreMap, ScoreMap) -> IO (ScoreMap, ScoreMap)
+accumulateVote : ProposalId -> EvmAddr -> (ScoreMap, ScoreMap) -> IO (ScoreMap, ScoreMap)
 accumulateVote pid voter (headerScores, cmdScores) = do
   ((h0, h1, h2), (c0, c1, c2)) <- readVote pid voter
 
@@ -228,12 +205,12 @@ isSnappedInEpoch pid = do
 ||| Take snapshot of current voting state
 ||| REQ_TALLY_005
 export
-snap : ProposalId -> IO ()
+snap : ProposalId -> IO (Outcome ())
 snap pid = do
   -- Check not already snapped
   snapped <- isSnappedInEpoch pid
   if snapped
-    then evmRevert 0 0  -- AlreadySnapped
+    then pure (Fail EpochMismatch (tagEvidence "AlreadySnapped"))
     else do
       -- Calculate scores
       (headerScores, cmdScores) <- calcRCVScores pid
@@ -242,8 +219,7 @@ snap pid = do
       currentEpoch <- calcCurrentEpoch pid
       setLastSnappedEpoch pid currentEpoch
 
-      -- (In real implementation, would emit ProposalSnapped event)
-      pure ()
+      pure (Ok ())
 
 -- =============================================================================
 -- Final Tally
@@ -252,14 +228,12 @@ snap pid = do
 ||| Perform final tally when proposal expires
 ||| REQ_TALLY_006
 export
-finalTally : ProposalId -> IO Bool
+finalTally : ProposalId -> IO (Outcome Bool)
 finalTally pid = do
   -- Check not already approved
   approved <- isApproved pid
   if approved
-    then do
-      evmRevert 0 0  -- ProposalAlreadyApproved
-      pure False
+    then pure (Fail InvalidTransition (tagEvidence "ProposalAlreadyApproved"))
     else do
       -- Calculate final scores
       (headerScores, cmdScores) <- calcRCVScores pid
@@ -272,14 +246,14 @@ finalTally pid = do
         -- Single winner for both
         ([winnerId], [winnerCmd]) => do
           approveProposal pid winnerId winnerCmd
-          pure True
+          pure (Ok True)
 
         -- Tie or no votes: extend expiration
         _ => do
           expiryDuration <- getExpiryDuration
           currentExpiration <- getProposalExpiration pid
           setProposalExpiration pid (currentExpiration + expiryDuration)
-          pure False
+          pure (Ok False)
 
 -- =============================================================================
 -- Tally and Execute
@@ -300,70 +274,78 @@ executeApproved pid = do
 ||| Tally and immediately execute if approved
 ||| REQ_TALLY_007: Combined tally and execute for efficiency
 export
-tallyAndExecute : ProposalId -> IO Bool
+tallyAndExecute : ProposalId -> IO (Outcome Bool)
 tallyAndExecute pid = do
   expired <- isProposalExpired pid
 
   if not expired
-    then do
-      evmRevert 0 0  -- ProposalNotExpired
-      pure False
+    then pure (Fail InvalidTransition (tagEvidence "ProposalNotExpired"))
     else do
-      success <- finalTally pid
-      if success
-        then executeApproved pid
-        else pure False
+      result <- finalTally pid
+      case result of
+        Ok True => do
+          executed <- executeApproved pid
+          pure (Ok executed)
+        Ok False => pure (Ok False)
+        Fail c e => pure (Fail c e)
 
 -- =============================================================================
--- Entry Point
+-- Tally Core Logic
 -- =============================================================================
 
-||| Tally function (entry point)
+||| Tally function (core logic)
 ||| REQ_TALLY_001: Anyone can call tally to count votes
 export
-tally : ProposalId -> IO ()
+tally : ProposalId -> IO (Outcome ())
 tally pid = do
   expired <- isProposalExpired pid
 
   if expired
     then do
-      _ <- finalTally pid
-      pure ()
-    else do
-      snap pid
+      result <- finalTally pid
+      case result of
+        Ok _ => pure (Ok ())
+        Fail c e => pure (Fail c e)
+    else snap pid
 
 -- =============================================================================
--- Main Entry Point
+-- Entry Points
 -- =============================================================================
 
-||| Main entry point for Tally contract
+||| Entry: tally(uint256)
 export
-main : IO ()
-main = do
-  selector <- getSelector
+tallyEntry : Entry tallySig
+tallyEntry = MkEntry tallySel $ do
+  pid <- runDecoder decodeUint256
+  result <- tally (uint256Value pid)
+  case result of
+    Ok () => evmReturn 0 0
+    Fail _ _ => evmRevert 0 0
 
-  if selector == SEL_TALLY
-    then do
-      pid <- calldataload 4
-      tally pid
-      evmReturn 0 0
+||| Entry: snap(uint256)
+export
+snapEntry : Entry snapSig
+snapEntry = MkEntry snapSel $ do
+  pid <- runDecoder decodeUint256
+  result <- snap (uint256Value pid)
+  case result of
+    Ok () => evmReturn 0 0
+    Fail _ _ => evmRevert 0 0
 
-    else if selector == SEL_SNAP
-    then do
-      pid <- calldataload 4
-      snap pid
-      evmReturn 0 0
+||| Entry: isApproved(uint256) -> bool
+export
+isApprovedEntry : Entry isApprovedSig
+isApprovedEntry = MkEntry isApprovedSel $ do
+  pid <- runDecoder decodeUint256
+  approved <- isApproved (uint256Value pid)
+  returnBool approved
 
-    else if selector == SEL_IS_APPROVED
-    then do
-      pid <- calldataload 4
-      approved <- isApproved pid
-      returnBool approved
-
-    else if selector == SEL_TALLY_AND_EXECUTE
-    then do
-      pid <- calldataload 4
-      success <- tallyAndExecute pid
-      returnBool success
-
-    else evmRevert 0 0
+||| Entry: tallyAndExecute(uint256) -> bool
+export
+tallyAndExecuteEntry : Entry tallyAndExecuteSig
+tallyAndExecuteEntry = MkEntry tallyAndExecuteSel $ do
+  pid <- runDecoder decodeUint256
+  result <- tallyAndExecute (uint256Value pid)
+  case result of
+    Ok success => returnBool success
+    Fail _ _ => evmRevert 0 0
