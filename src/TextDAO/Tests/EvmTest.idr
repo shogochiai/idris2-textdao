@@ -102,17 +102,14 @@ allEvmTests =
   , ("REQ_EVM_004_revert_unauthorized", test_REQ_EVM_004_revert_unauthorized)
   ]
 
+||| Run all EVM tests and return passed count
+||| NOTE: This version avoids putStrLn to prevent REVERT in EVM execution
 export
-runEvmTests : IO ()
+runEvmTests : IO Integer
 runEvmTests = do
-  putStrLn "=== EVM Integration Tests ==="
-  results <- traverse runTest allEvmTests
-  let numPassed = length $ filter id results
-  let numTotal = length results
-  putStrLn $ "EVM: " ++ show numPassed ++ "/" ++ show numTotal ++ " passed"
-  where
-    runTest : (String, IO Bool) -> IO Bool
-    runTest (name, test) = do
-      result <- test
-      putStrLn $ (if result then "[PASS]" else "[FAIL]") ++ " " ++ name
-      pure result
+  r1 <- test_REQ_EVM_001_selector_dispatch
+  r2 <- test_REQ_EVM_002_calldata_parsing
+  r3 <- test_REQ_EVM_003_return_encoding
+  r4 <- test_REQ_EVM_004_revert_unauthorized
+  pure $ (if r1 then 1 else 0) + (if r2 then 1 else 0) +
+         (if r3 then 1 else 0) + (if r4 then 1 else 0)

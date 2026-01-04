@@ -184,6 +184,7 @@ runEvmIntegrationTests = do
         putStrLn $ "Run: cd /Users/bob/code/idris2-yul && ./scripts/build-contract.sh examples/TextDAO_Members.idr"
         pure ()
 
+  -- Continue with loaded bytecode
   let trimmedBytecode = trim bytecode
   putStrLn $ "Loaded bytecode: " ++ show (length trimmedBytecode) ++ " chars"
   putStrLn ""
@@ -192,7 +193,6 @@ runEvmIntegrationTests = do
   r1 <- test_getMemberCount_initial trimmedBytecode
   r2 <- test_addMember trimmedBytecode
 
-  let passed = length $ filter id [r1, r2]
-  let total = 2
+  -- Report results
   putStrLn ""
-  putStrLn $ "Results: " ++ show passed ++ "/" ++ show total ++ " passed"
+  putStrLn $ "Results: " ++ show (length $ filter id [r1, r2]) ++ "/2 passed"

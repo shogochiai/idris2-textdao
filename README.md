@@ -45,27 +45,61 @@ pack build idris2-textdao
 idris2-yul --cg yul --build idris2-textdao.ipkg
 ```
 
-## Running Tests
+## Build & Test Pipeline
 
-The test suite runs on EVM:
+**Important**: This project uses `%foreign "evm:*"` FFI directives which require special handling.
 
-```bash
-# Build with Yul backend
-idris2-yul --cg yul --build idris2-textdao.ipkg
+### Architecture
 
-# Deploy and run (requires anvil)
-anvil --code-size-limit 100000 &
-BYTECODE=$(solc --strict-assembly --bin build/exec/textdao-tests.yul | tail -1)
-cast send --create "0x$BYTECODE" --rpc-url http://localhost:8545
+```
+idris2-textdao/src/TextDAO/*.idr  (uses %foreign "evm:sload", "evm:sstore", etc.)
+        ↓
+        │  Cannot build directly with standard idris2
+        │  (evm:* FFI is not supported by Chez backend)
+        ↓
+idris2-yul/examples/TextDAO_*.idr  (mirrored contract sources)
+        ↓  ./scripts/build-contract.sh
+idris2-yul → Yul → solc → .bin (EVM bytecode)
+        ↓
+idris2-evm-run (built with --profile)  ← Pure Idris2 EVM interpreter
+        ↓
+~/code/idris2-evm/idris2-evm-run.ss.html  (Chez profiler output)
+        ↓
+lazy evm ask --steps=4  ← Coverage analysis
 ```
 
-## Coverage
+### Running Tests
 
-Function-level coverage is available via `idris2-evm-coverage`:
+```bash
+# Option 1: Use the test script (recommended)
+./scripts/test-all-contracts.sh
+
+# This script:
+# 1. Builds contracts via idris2-yul/scripts/build-contract.sh
+# 2. Runs them through idris2-evm-run (pack run idris2-evm -- ...)
+# 3. Generates profiler output at ~/code/idris2-evm/idris2-evm-run.ss.html
+```
+
+### Coverage Analysis
+
+```bash
+# Run STI Parity coverage analysis (Step 4)
+lazy evm ask /path/to/idris2-textdao --steps=4
+
+# Output example:
+#   [Step 4] EVM interpreter coverage... Result: hasGap
+#   Coverage: 12760/49800 (25.62%)
+```
+
+The coverage tool automatically finds the profiler output at the known location.
+If not found, it provides instructions for manual setup.
+
+## Coverage Metrics
+
+Function-level coverage via `idris2-evm-coverage`:
 
 ```
 Total TextDAO Functions/Storages: 81
-Coverage breakdown:
   TextDAO.Functions.Members:    6 functions
   TextDAO.Functions.OnlyMember: 8 functions
   TextDAO.Functions.OnlyReps:  10 functions

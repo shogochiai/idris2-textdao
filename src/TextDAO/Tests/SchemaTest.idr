@@ -86,15 +86,11 @@ allSchemaTests =
   , ("meta_offsets_sequential", test_meta_offsets_sequential)
   ]
 
-printResult : (String, Bool) -> IO ()
-printResult (name, ok) = putStrLn $ (if ok then "[PASS]" else "[FAIL]") ++ " " ++ name
+countPassed : List (String, Bool) -> Integer
+countPassed = cast . length . filter snd
 
-countPassed : List (String, Bool) -> Nat
-countPassed = length . filter snd
-
+||| Run all schema tests and return passed count
+||| NOTE: Schema tests are pure (Bool), not IO Bool
 export
-runSchemaTests : IO ()
-runSchemaTests = do
-  putStrLn "=== Schema Tests ==="
-  traverse_ printResult allSchemaTests
-  putStrLn $ "Schema: " ++ show (countPassed allSchemaTests) ++ "/" ++ show (length allSchemaTests) ++ " passed"
+runSchemaTests : IO Integer
+runSchemaTests = pure $ countPassed allSchemaTests

@@ -182,17 +182,19 @@ allMembersTests =
   , ("storage_slot_isolation", test_storage_slot_isolation)
   ]
 
+||| Run all members tests and return passed count
+||| NOTE: This version avoids putStrLn to prevent REVERT in EVM execution
 export
-runMembersTests : IO ()
+runMembersTests : IO Integer
 runMembersTests = do
-  putStrLn "=== Members Tests (EVM Runtime) ==="
-  results <- traverse runTest allMembersTests
-  let numPassed = length $ filter id results
-  let numTotal = length results
-  putStrLn $ "Members: " ++ show numPassed ++ "/" ++ show numTotal ++ " passed"
-  where
-    runTest : (String, IO Bool) -> IO Bool
-    runTest (name, test) = do
-      result <- test
-      putStrLn $ (if result then "[PASS]" else "[FAIL]") ++ " " ++ name
-      pure result
+  r1 <- test_REQ_MEMBERS_001_addMember
+  r2 <- test_REQ_MEMBERS_002_getMemberAddr
+  r3 <- test_REQ_MEMBERS_003_isMember_true
+  r4 <- test_REQ_MEMBERS_003_isMember_false
+  r5 <- test_REQ_MEMBERS_004_sequential_ids
+  r6 <- test_REQ_MEMBERS_005_memberAdded_event
+  r7 <- test_storage_slot_isolation
+  pure $ (if r1 then 1 else 0) + (if r2 then 1 else 0) +
+         (if r3 then 1 else 0) + (if r4 then 1 else 0) +
+         (if r5 then 1 else 0) + (if r6 then 1 else 0) +
+         (if r7 then 1 else 0)

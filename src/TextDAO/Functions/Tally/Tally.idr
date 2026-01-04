@@ -53,6 +53,10 @@ SEL_SNAP = 0x78901234
 SEL_IS_APPROVED : Integer
 SEL_IS_APPROVED = 0x89012345
 
+||| tallyAndExecute(uint256) -> 0x90123456
+SEL_TALLY_AND_EXECUTE : Integer
+SEL_TALLY_AND_EXECUTE = 0x90123456
+
 -- =============================================================================
 -- Entry Point Helpers
 -- =============================================================================
@@ -278,6 +282,39 @@ finalTally pid = do
           pure False
 
 -- =============================================================================
+-- Tally and Execute
+-- =============================================================================
+
+||| Execute the approved command (simplified)
+||| REQ_EXECUTE_001: Execute approved proposals
+executeApproved : ProposalId -> IO Bool
+executeApproved pid = do
+  -- Check if already executed
+  executed <- isFullyExecuted pid
+  if executed
+    then pure False
+    else do
+      setFullyExecuted pid True
+      pure True
+
+||| Tally and immediately execute if approved
+||| REQ_TALLY_007: Combined tally and execute for efficiency
+export
+tallyAndExecute : ProposalId -> IO Bool
+tallyAndExecute pid = do
+  expired <- isProposalExpired pid
+
+  if not expired
+    then do
+      evmRevert 0 0  -- ProposalNotExpired
+      pure False
+    else do
+      success <- finalTally pid
+      if success
+        then executeApproved pid
+        else pure False
+
+-- =============================================================================
 -- Entry Point
 -- =============================================================================
 
@@ -322,5 +359,11 @@ main = do
       pid <- calldataload 4
       approved <- isApproved pid
       returnBool approved
+
+    else if selector == SEL_TALLY_AND_EXECUTE
+    then do
+      pid <- calldataload 4
+      success <- tallyAndExecute pid
+      returnBool success
 
     else evmRevert 0 0

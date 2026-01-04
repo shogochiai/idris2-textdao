@@ -17,6 +17,12 @@ modules = TextDAO.Storages.Schema
         , TextDAO.Functions.Vote.Tests.VoteTest
         , TextDAO.Functions.Tally.Tally
         , TextDAO.Functions.Tally.Tests.TallyTest
+        , TextDAO.Functions.Fork.Fork
+        , TextDAO.Functions.Fork.Tests.ForkTest
+        , TextDAO.Functions.Execute.Execute
+        , TextDAO.Functions.Execute.Tests.ExecuteTest
+        , TextDAO.Functions.Text.Text
+        , TextDAO.Functions.Text.Tests.TextTest
         , TextDAO.Tests.SchemaTest
         , TextDAO.Tests.EvmTest
         , TextDAO.Tests.AllTests

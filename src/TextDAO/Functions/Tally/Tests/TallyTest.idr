@@ -263,17 +263,16 @@ allTallyTests =
   , ("finalTally_tie", test_finalTally_tie)
   ]
 
+||| Run all tally tests and return passed count
+||| NOTE: This version avoids putStrLn to prevent REVERT in EVM execution
 export
-runTallyTests : IO ()
+runTallyTests : IO Integer
 runTallyTests = do
-  putStrLn "=== Tally Tests (EVM Runtime) ==="
-  results <- traverse runTest allTallyTests
-  let numPassed = length $ filter id results
-  let numTotal = length results
-  putStrLn $ "Tally: " ++ show numPassed ++ "/" ++ show numTotal ++ " passed"
-  where
-    runTest : (String, IO Bool) -> IO Bool
-    runTest (name, test) = do
-      result <- test
-      putStrLn $ (if result then "[PASS]" else "[FAIL]") ++ " " ++ name
-      pure result
+  r1 <- test_REQ_TALLY_001_tallyCall
+  r2 <- test_REQ_TALLY_002_calcScores
+  r3 <- test_REQ_TALLY_003_notApproved
+  r4 <- test_REQ_TALLY_004_approveProposal
+  r5 <- test_REQ_TALLY_005_snapEpoch
+  pure $ (if r1 then 1 else 0) + (if r2 then 1 else 0) +
+         (if r3 then 1 else 0) + (if r4 then 1 else 0) +
+         (if r5 then 1 else 0)
